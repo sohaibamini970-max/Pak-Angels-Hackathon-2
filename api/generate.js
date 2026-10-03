@@ -117,7 +117,7 @@ export default async function handler(req, res) {
   for (const model of models) {
     try {
       // Use the x-goog-api-key header (the modern, safe way)
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
       const r = await fetch(url, {
         method: 'POST',
         headers: {
