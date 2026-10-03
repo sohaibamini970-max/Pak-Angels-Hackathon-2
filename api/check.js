@@ -1,4 +1,4 @@
-import { callGemini } from './_gemini.js';
+import { callGemini } from '../api-lib/_gemini.js';
 
 export const config = { maxDuration: 60 };
 
