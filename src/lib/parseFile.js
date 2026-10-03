@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth/mammoth.browser';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
+import { extractPdfLines } from './pdfExport';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 /* -------------------- PDF -------------------- */
@@ -9,6 +9,11 @@ async function parsePDF(file) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const pages = [];
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+        const lines = await extractPdfLines(file);
+        return lines.map((l) => l.text).join('\n');
+    }
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);

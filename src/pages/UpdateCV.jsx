@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import UploadZone from '../components/UploadZone';
 import PDFPreview from '../components/PDFPreview';
 import CVPreview from '../components/CVPreview';
@@ -7,6 +7,20 @@ import ChatBot from '../components/ChatBot';
 import { parseFile } from '../lib/parseFile';
 import { structureCV } from '../lib/structureCV';
 import { checkMistakes, improveCV } from '../api/client';
+import { exportEditedPdf } from '../lib/pdfExport';
+
+const VIEW_LABELS = { original: 'PDF', editable: 'Editable', formatted: 'Formatted' };
+
+const downloadBlob = (blob, name) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
 const WELCOME = {
     role: 'assistant',
@@ -21,8 +35,6 @@ const diffLines = (oldText, newText) => {
         .filter((l) => l && !old.has(l));
 };
 
-const VIEW_LABELS = { original: 'Original', editable: 'Editable', formatted: 'Formatted' };
-
 export default function UpdateCV() {
     const [file, setFile] = useState(null);
     const [cv, setCv] = useState(null);
@@ -36,6 +48,8 @@ export default function UpdateCV() {
     const [viewMode, setViewMode] = useState('editable'); // 'original' | 'editable' | 'formatted'
     const [messages, setMessages] = useState([WELCOME]);
     const [highlights, setHighlights] = useState([]);
+    const [editedPdf, setEditedPdf] = useState(null); // live patched PDF (Blob)
+    const [exporting, setExporting] = useState(false);
     const flashTimer = useRef(null);
 
     const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
@@ -44,6 +58,31 @@ export default function UpdateCV() {
     const isPDF = file?.name?.toLowerCase().endsWith('.pdf');
     const dirty = !!extractedText && extractedText !== originalText;
     const modes = isPDF ? ['original', 'editable', 'formatted'] : ['editable', 'formatted'];
+
+    // Live-rebuild the patched PDF whenever the text changes
+    useEffect(() => {
+        if (!isPDF || !dirty) {
+            setEditedPdf(null);
+            return;
+        }
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            try {
+                const bytes = await exportEditedPdf(file, extractedText);
+                if (!cancelled) setEditedPdf(new Blob([bytes], { type: 'application/pdf' }));
+            } catch (e) {
+                if (!cancelled) {
+                    setEditedPdf(null);
+                    pushLog(`⚠️ PDF preview: ${e.message}`);
+                }
+            }
+        }, 600);
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [extractedText, file, isPDF, dirty]);
 
     const flash = (lines) => {
         clearTimeout(flashTimer.current);
@@ -67,6 +106,7 @@ export default function UpdateCV() {
         setHighlights([]);
         setExtractedText('');
         setOriginalText('');
+        setEditedPdf(null);
         setViewMode(pdf ? 'original' : 'editable');
         setParsing(true);
         pushLog(`Loaded ${f.name}`);
@@ -102,7 +142,7 @@ export default function UpdateCV() {
             pushMsg(
                 'assistant',
                 found.length
-                    ? `I found ${found.length} issue(s), highlighted in red. Click a highlight to fix it, or ask me to fix them all.`
+                    ? `I found ${found.length} issue(s). Switch to the Editable tab to see them highlighted in red, then click one to fix it, or ask me to fix them all.`
                     : 'No issues found. Your CV looks clean!'
             );
             if (found.length > 0 && viewMode === 'formatted') setViewMode('editable');
@@ -121,7 +161,6 @@ export default function UpdateCV() {
         }
         const updated = extractedText.split(issue.original).join(issue.suggestion);
         rebuild(updated);
-        setViewMode((m) => (m === 'original' ? 'editable' : m));
         flash([issue.suggestion]);
         pushLog(`✅ Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
@@ -145,7 +184,6 @@ export default function UpdateCV() {
         }
         rebuild(updated);
         setIssues([]);
-        setViewMode((m) => (m === 'original' ? 'editable' : m));
         flash(changed);
         pushLog(`✅ Applied ${count} fix(es)`);
         pushMsg('assistant', `Applied ${count} fix(es). Changes are highlighted in green.`);
@@ -184,12 +222,12 @@ export default function UpdateCV() {
         pushLog(`💬 ${instruction}`);
         try {
             const result = await improveCV(extractedText, instruction);
-            const newText = typeof result?.updatedText === 'string' ? result.updatedText.replace(/\r\n?/g, '\n') : '';
+            const newText =
+                typeof result?.updatedText === 'string' ? result.updatedText.replace(/\r\n?/g, '\n') : '';
             if (newText && newText !== extractedText) {
                 const changed = diffLines(extractedText, newText);
                 rebuild(newText);
                 setIssues([]);
-                setViewMode((m) => (m === 'original' ? 'editable' : m));
                 flash(changed);
                 pushLog('✅ AI updated the CV');
                 pushMsg(
@@ -209,12 +247,29 @@ export default function UpdateCV() {
         }
     };
 
-    const handleDownload = () => {
-        // the original PDF can't contain your edits, so print the edited version instead
-        if (viewMode === 'original' && dirty) {
-            setViewMode('editable');
-            pushLog('Downloading edited version…');
-            setTimeout(() => window.print(), 400);
+    const handleDownload = async () => {
+        if (isPDF) {
+            if (!dirty) {
+                downloadBlob(file, file.name);
+                pushLog('Downloaded original PDF');
+                return;
+            }
+            setExporting(true);
+            pushLog('Building edited PDF in the original design…');
+            try {
+                const bytes = await exportEditedPdf(file, extractedText);
+                downloadBlob(
+                    new Blob([bytes], { type: 'application/pdf' }),
+                    file.name.replace(/\.pdf$/i, '') + '-edited.pdf'
+                );
+                pushLog('✅ Downloaded edited PDF');
+            } catch (e) {
+                pushLog(`⚠️ ${e.message}. Falling back to print.`);
+                setViewMode('editable');
+                setTimeout(() => window.print(), 400);
+            } finally {
+                setExporting(false);
+            }
             return;
         }
         pushLog(`Downloading ${viewMode} view…`);
@@ -277,12 +332,13 @@ export default function UpdateCV() {
                         {file && (
                             <button
                                 onClick={handleDownload}
-                                className="flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-900"
+                                disabled={exporting}
+                                className="flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-900 disabled:opacity-60"
                             >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
                                 </svg>
-                                Download
+                                {exporting ? 'Preparing…' : 'Download'}
                             </button>
                         )}
                         <span className="max-w-[140px] truncate text-[11px] text-slate-500">
@@ -292,20 +348,18 @@ export default function UpdateCV() {
                 </div>
 
                 {isPDF && viewMode === 'original' && dirty && (
-                    <div className="flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-5 py-2 text-[11px] text-amber-800">
-                        <span>The original PDF can't change. Your edits are in the Editable view.</span>
-                        <button
-                            onClick={() => setViewMode('editable')}
-                            className="rounded bg-amber-600 px-2 py-0.5 font-medium text-white hover:bg-amber-700"
-                        >
-                            View edited
-                        </button>
+                    <div className="flex items-center justify-between gap-2 border-b border-green-200 bg-green-50 px-5 py-2 text-[11px] text-green-800">
+                        <span>
+                            {editedPdf
+                                ? 'Showing your edits on the original design. This is what you will download.'
+                                : 'Applying your edits to the PDF…'}
+                        </span>
                     </div>
                 )}
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
                     {isPDF && viewMode === 'original' ? (
-                        <PDFPreview file={file} issues={issues} />
+                        <PDFPreview file={dirty && editedPdf ? editedPdf : file} issues={dirty ? [] : issues} />
                     ) : viewMode === 'formatted' ? (
                         <CVPreview cv={cv} issues={issues} highlights={highlights} onInlineEdit={handleInlineEdit} />
                     ) : (
