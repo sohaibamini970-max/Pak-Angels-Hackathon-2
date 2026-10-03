@@ -23,12 +23,10 @@ export default async function handler(req, res) {
     });
   }
 
-  // Clean environment variable
   const apiKey = rawKey
     .trim()
     .replace(/^["']|["']$/g, '');
 
-  // Diagnostics — DO NOT log the complete API key
   console.log('Gemini API key configured');
   console.log('KEY LENGTH:', apiKey.length);
   console.log('KEY PREFIX:', apiKey.slice(0, 6));
@@ -44,7 +42,6 @@ export default async function handler(req, res) {
     properties: {
       personalInfo: {
         type: 'object',
-
         properties: {
           name: { type: 'string' },
           email: { type: 'string' },
@@ -53,7 +50,6 @@ export default async function handler(req, res) {
           linkedin: { type: 'string' },
           github: { type: 'string' },
         },
-
         required: [
           'name',
           'email',
@@ -70,10 +66,8 @@ export default async function handler(req, res) {
 
       experience: {
         type: 'array',
-
         items: {
           type: 'object',
-
           properties: {
             company: { type: 'string' },
             role: { type: 'string' },
@@ -100,10 +94,8 @@ export default async function handler(req, res) {
 
       education: {
         type: 'array',
-
         items: {
           type: 'object',
-
           properties: {
             institution: { type: 'string' },
             degree: { type: 'string' },
@@ -122,7 +114,6 @@ export default async function handler(req, res) {
 
       skills: {
         type: 'object',
-
         properties: {
           technical: {
             type: 'array',
@@ -147,10 +138,8 @@ export default async function handler(req, res) {
 
       projects: {
         type: 'array',
-
         items: {
           type: 'object',
-
           properties: {
             name: { type: 'string' },
             description: { type: 'string' },
@@ -210,34 +199,36 @@ export default async function handler(req, res) {
   };
 
   // ---------------------------------------------------------
-  // SYSTEM PROMPT
+  // PROMPT
   // ---------------------------------------------------------
 
-  const systemPrompt =
-    'You are an expert CV writer. Given a short description of a person, ' +
-    'produce a complete, professional CV. ' +
-    'Use strong action verbs in experience bullets. ' +
-    'Quantify impact where plausible. ' +
-    'Keep the summary to 2-3 sentences. ' +
-    'Use empty strings for unknown fields. ' +
-    'Never invent emails, phone numbers, companies, degrees, dates, or achievements. ' +
-    'Write 3-5 bullets per experience entry. ' +
-    'Keep the information truthful to the user description.';
+  const systemPrompt = `
+  You are an expert professional CV writer.
 
-  // ---------------------------------------------------------
-  // GEMINI REQUEST BODY
-  // ---------------------------------------------------------
+Create a complete, professional CV from the user's description.
+
+Rules:
+- Use strong action verbs in experience bullets.
+- Quantify impact only when the user provides enough information.
+- Never invent emails, phone numbers, companies, degrees, dates,
+  achievements, certifications, awards, or technologies.
+- Use empty strings for unknown scalar fields.
+- Use empty arrays when information is not provided.
+- Keep the summary to 2 - 3 sentences.
+- Write 3 - 5 bullets per experience entry when experience exists.
+- Keep all information truthful to the user's description.
+  - Return only the requested JSON structure.
+`;
 
   const body = {
     contents: [
       {
         role: 'user',
-
         parts: [
           {
             text:
-              `${systemPrompt}\n\n` +
-              `User description:\n${prompt}`,
+              `${ systemPrompt } \n\n` +
+              `User description: \n${ prompt } `,
           },
         ],
       },
@@ -251,203 +242,233 @@ export default async function handler(req, res) {
   };
 
   // ---------------------------------------------------------
-  // MODELS
+  // CURRENT GEMINI MODELS
   // ---------------------------------------------------------
 
   const models = [
+    'gemini-3.8-flash',
+    'gemini-3.7-flash',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
+    'gemini-2.5-flash-lite',
   ];
 
   // ---------------------------------------------------------
-  // TRY EACH MODEL
+  // TRY MODELS
   // ---------------------------------------------------------
+
+  let lastError = null;
 
   for (const model of models) {
     try {
       const url =
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-      console.log(`Trying Gemini model: ${model}`);
+console.log(`Trying Gemini model: ${model}`);
 
-      // IMPORTANT:
-      // API key is now sent through x-goog-api-key.
-      // Do NOT put the key in the URL.
-      const r = await fetch(url, {
-        method: 'POST',
+const r = await fetch(url, {
+  method: 'POST',
 
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
+  headers: {
+    'Content-Type': 'application/json',
+    'x-goog-api-key': apiKey,
+  },
 
-        body: JSON.stringify(body),
-      });
+  body: JSON.stringify(body),
+});
 
-      // -----------------------------------------------------
-      // HANDLE API ERROR
-      // -----------------------------------------------------
+const detail = await r.text();
 
-      if (!r.ok) {
-        const detail = await r.text();
+// -----------------------------------------------------
+// API ERROR
+// -----------------------------------------------------
 
-        console.error(
-          `[${model}] Gemini ${r.status}:`,
-          detail.slice(0, 1000)
-        );
+if (!r.ok) {
+  console.error(
+    `[${model}] Gemini ${r.status}:`,
+    detail.slice(0, 2000)
+  );
 
-        // Model unavailable / unsupported
-        if (r.status === 404) {
-          console.log(
-            `${model} is unavailable. Trying next model...`
-          );
+  lastError = {
+    model,
+    status: r.status,
+    detail: detail.slice(0, 2000),
+  };
 
-          continue;
-        }
+  // Model doesn't exist / isn't available
+  if (r.status === 404) {
+    console.log(
+      `${model} unavailable. Trying next model...`
+    );
 
-        // Invalid request
-        if (r.status === 400) {
-          console.log(
-            `${model} rejected the request. Trying next model...`
-          );
-
-          continue;
-        }
-
-        // Authentication failure
-        if (r.status === 401) {
-          return res.status(401).json({
-            error: 'Gemini authentication failed',
-            message:
-              'The GEMINI_API_KEY was rejected by Google Gemini API.',
-            detail,
-          });
-        }
-
-        // Permission / billing / quota
-        if (r.status === 403) {
-          return res.status(403).json({
-            error: 'Gemini API permission denied',
-            message:
-              'The API key is valid but the Gemini API request is not permitted for this project.',
-            detail,
-          });
-        }
-
-        // Rate limit / quota
-        if (r.status === 429) {
-          return res.status(429).json({
-            error: 'Gemini API quota exceeded',
-            message:
-              'Gemini API rate limit or quota was exceeded.',
-            detail,
-          });
-        }
-
-        // Other API error
-        return res.status(r.status).json({
-          error: `Gemini error (${model})`,
-          detail,
-        });
-      }
-
-      // -----------------------------------------------------
-      // PARSE RESPONSE
-      // -----------------------------------------------------
-
-      const data = await r.json();
-
-      const text =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text) {
-        console.error(
-          `[${model}] Empty Gemini response:`,
-          JSON.stringify(data).slice(0, 2000)
-        );
-
-        return res.status(500).json({
-          error: 'Empty response from Gemini',
-          detail: JSON.stringify(data).slice(0, 1000),
-        });
-      }
-
-      // -----------------------------------------------------
-      // PARSE GENERATED JSON
-      // -----------------------------------------------------
-
-      let parsed;
-
-      try {
-        parsed = JSON.parse(text);
-      } catch (parseError) {
-        console.error(
-          `[${model}] Invalid JSON returned by Gemini:`,
-          text.slice(0, 2000)
-        );
-
-        return res.status(500).json({
-          error: 'Gemini returned invalid JSON',
-          detail: text.slice(0, 1000),
-        });
-      }
-
-      // -----------------------------------------------------
-      // ADD LOCAL IDS
-      // -----------------------------------------------------
-
-      const uid = () =>
-        Math.random()
-          .toString(36)
-          .slice(2, 10);
-
-      parsed.experience =
-        (parsed.experience || []).map((entry) => ({
-          ...entry,
-          id: uid(),
-        }));
-
-      parsed.education =
-        (parsed.education || []).map((entry) => ({
-          ...entry,
-          id: uid(),
-        }));
-
-      parsed.projects =
-        (parsed.projects || []).map((entry) => ({
-          ...entry,
-          id: uid(),
-        }));
-
-      // -----------------------------------------------------
-      // SUCCESS
-      // -----------------------------------------------------
-
-      console.log(
-        `Gemini ${model} generated CV successfully`
-      );
-
-      return res.status(200).json(parsed);
-
-    } catch (error) {
-      console.error(
-        `[${model}] Request threw an exception:`,
-        error
-      );
-
-      // Continue to next model instead of immediately failing
-      continue;
-    }
+    continue;
   }
 
-  // ---------------------------------------------------------
-  // ALL MODELS FAILED
-  // ---------------------------------------------------------
+  // Bad request may mean the schema/configuration
+  // isn't supported by that model.
+  if (r.status === 400) {
+    console.log(
+      `${model} rejected the request. Trying next model...`
+    );
 
-  return res.status(500).json({
-    error: 'No compatible Gemini model available',
-    message:
-      'All configured Gemini models failed to generate the CV.',
+    continue;
+  }
+
+  // Authentication
+  if (r.status === 401) {
+    return res.status(401).json({
+      error: 'Gemini authentication failed',
+      message:
+        'The GEMINI_API_KEY was rejected by Google Gemini API.',
+      detail: detail.slice(0, 2000),
+    });
+  }
+
+  // Permission / billing
+  if (r.status === 403) {
+    return res.status(403).json({
+      error: 'Gemini API permission denied',
+      message:
+        'The API key does not have permission to use this Gemini model/API.',
+      detail: detail.slice(0, 2000),
+    });
+  }
+
+  // Rate limit
+  if (r.status === 429) {
+    return res.status(429).json({
+      error: 'Gemini API quota exceeded',
+      message:
+        'Gemini API rate limit or quota was exceeded.',
+      detail: detail.slice(0, 2000),
+    });
+  }
+
+  return res.status(r.status).json({
+    error: `Gemini error (${model})`,
+    detail: detail.slice(0, 2000),
   });
 }
+
+// -----------------------------------------------------
+// PARSE RESPONSE
+// -----------------------------------------------------
+
+let data;
+
+try {
+  data = JSON.parse(detail);
+} catch {
+  return res.status(500).json({
+    error: 'Invalid response from Gemini',
+    detail: detail.slice(0, 2000),
+  });
+}
+
+const text =
+  data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+if (!text) {
+  console.error(
+    `[${model}] Empty Gemini response:`,
+    JSON.stringify(data).slice(0, 3000)
+  );
+
+  lastError = {
+    model,
+    status: 500,
+    detail: JSON.stringify(data).slice(0, 2000),
+  };
+
+  continue;
+}
+
+// -----------------------------------------------------
+// PARSE GENERATED JSON
+// -----------------------------------------------------
+
+let parsed;
+
+try {
+  parsed = JSON.parse(text);
+} catch (parseError) {
+  console.error(
+    `[${model}] Invalid JSON returned by Gemini:`,
+    text.slice(0, 3000)
+  );
+
+  return res.status(500).json({
+    error: 'Gemini returned invalid JSON',
+    detail: text.slice(0, 2000),
+  });
+}
+
+// -----------------------------------------------------
+// LOCAL IDS
+// -----------------------------------------------------
+
+const uid = () =>
+  Math.random()
+    .toString(36)
+    .slice(2, 10);
+
+parsed.experience =
+  (parsed.experience || []).map((entry) => ({
+    ...entry,
+    id: uid(),
+  }));
+
+parsed.education =
+  (parsed.education || []).map((entry) => ({
+    ...entry,
+    id: uid(),
+  }));
+
+parsed.projects =
+  (parsed.projects || []).map((entry) => ({
+    ...entry,
+    id: uid(),
+  }));
+
+// -----------------------------------------------------
+// SUCCESS
+// -----------------------------------------------------
+
+console.log(
+  `Gemini ${model} generated CV successfully`
+);
+
+return res.status(200).json(parsed);
+
+    } catch (error) {
+  console.error(
+    `[${model}] Request exception:`,
+    error
+  );
+
+  lastError = {
+    model,
+    status: 500,
+    detail: error?.message || String(error),
+  };
+
+  continue;
+}
+  }
+
+// ---------------------------------------------------------
+// ALL MODELS FAILED
+// ---------------------------------------------------------
+
+console.error(
+  'All Gemini models failed.',
+  lastError
+);
+
+return res.status(500).json({
+  error: 'No compatible Gemini model available',
+  message:
+    'All configured Gemini models failed to generate the CV.',
+  lastError,
+});
+}
+
