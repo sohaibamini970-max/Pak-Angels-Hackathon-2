@@ -1,11 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-export default function PDFPreview({ file }) {
+const escapeHtml = (s) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export default function PDFPreview({ file, issues = [] }) {
     const [numPages, setNumPages] = useState(null);
     const [containerWidth, setContainerWidth] = useState(0);
     const containerRef = useRef(null);
@@ -19,6 +23,27 @@ export default function PDFPreview({ file }) {
         ro.observe(el);
         return () => ro.disconnect();
     }, []);
+
+    // Highlights mistakes directly on the original PDF via the text layer
+    const textRenderer = useCallback(
+        ({ str }) => {
+            const originals = issues
+                .map((i) => i.original)
+                .filter(Boolean)
+                .sort((a, b) => b.length - a.length);
+            if (originals.length === 0) return escapeHtml(str);
+            const re = new RegExp(`(${originals.map(escapeRegex).join('|')})`, 'g');
+            return str
+                .split(re)
+                .map((part, i) =>
+                    i % 2 === 1
+                        ? `<mark data-issue style="background:rgba(239,68,68,0.28);border-bottom:2px wavy #ef4444;color:transparent;border-radius:2px">${escapeHtml(part)}</mark>`
+                        : escapeHtml(part)
+                )
+                .join('');
+        },
+        [issues]
+    );
 
     if (!file) {
         return (
@@ -56,7 +81,8 @@ export default function PDFPreview({ file }) {
                             width={pageWidth}
                             devicePixelRatio={Math.max(window.devicePixelRatio || 1, 2)}
                             renderAnnotationLayer={false}
-                            renderTextLayer={false}
+                            renderTextLayer={true}
+                            customTextRenderer={textRenderer}
                         />
                     </div>
                 ))}

@@ -1,11 +1,24 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import UploadZone from '../components/UploadZone';
 import PDFPreview from '../components/PDFPreview';
 import CVPreview from '../components/CVPreview';
-import PromptBar from '../components/PromptBar';
+import ChatBot from '../components/ChatBot';
 import { parseFile } from '../lib/parseFile';
 import { structureCV } from '../lib/structureCV';
 import { checkMistakes, improveCV } from '../api/client';
+
+const WELCOME = {
+    role: 'assistant',
+    text: "Hi! Upload your CV and I'll show it live. Then ask me to fix mistakes, add projects, rewrite your summary, and more. You'll see every change in the preview.",
+};
+
+const diffLines = (oldText, newText) => {
+    const old = new Set(oldText.split('\n').map((s) => s.trim()));
+    return newText
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((l) => l && !old.has(l));
+};
 
 export default function UpdateCV() {
     const [file, setFile] = useState(null);
@@ -17,10 +30,21 @@ export default function UpdateCV() {
     const [checking, setChecking] = useState(false);
     const [prompting, setPrompting] = useState(false);
     const [viewMode, setViewMode] = useState('original'); // 'original' | 'editable'
+    const [messages, setMessages] = useState([WELCOME]);
+    const [highlights, setHighlights] = useState([]); // recently changed lines (green flash)
+    const flashTimer = useRef(null);
 
     const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
+    const pushMsg = (role, text) => setMessages((m) => [...m, { role, text }]);
 
     const isPDF = file?.name?.toLowerCase().endsWith('.pdf');
+
+    const flash = (lines) => {
+        clearTimeout(flashTimer.current);
+        setHighlights(lines);
+        flashTimer.current = setTimeout(() => setHighlights([]), 8000);
+    };
+
     const rebuild = (text) => {
         setExtractedText(text);
         setCv(structureCV(text));
@@ -30,6 +54,7 @@ export default function UpdateCV() {
         setFile(f);
         setCv(null);
         setIssues([]);
+        setHighlights([]);
         setExtractedText('');
         setViewMode('original');
         setParsing(true);
@@ -39,6 +64,7 @@ export default function UpdateCV() {
             const text = await parseFile(f);
             rebuild(text);
             pushLog(`Extracted ${text.length} chars`);
+            pushMsg('assistant', `Loaded ${f.name}. Click "Find issues" or tell me what to change.`);
         } catch (e) {
             pushLog(`❌ Parse failed: ${e.message}`);
             alert('Parse failed: ' + e.message);
@@ -57,13 +83,16 @@ export default function UpdateCV() {
         pushLog('Running AI proofread…');
         try {
             const result = await checkMistakes(extractedText);
-            setIssues(result.issues || []);
-            pushLog(
-                result.issues?.length
-                    ? `Found ${result.issues.length} issue(s)`
-                    : '✅ No issues found'
+            const found = (result.issues || []).filter((i) => i.original);
+            setIssues(found);
+            pushLog(found.length ? `Found ${found.length} issue(s)` : '✅ No issues found');
+            pushMsg(
+                'assistant',
+                found.length
+                    ? `I found ${found.length} issue(s), highlighted in red. Click a highlight to edit it, press Apply on a suggestion, or ask me to fix them all.`
+                    : 'No issues found. Your CV looks clean!'
             );
-            if (result.issues?.length > 0) setViewMode('editable');
+            if (found.length > 0) setViewMode('editable');
         } catch (e) {
             pushLog(`❌ Check failed: ${e.message}`);
             alert('Check failed: ' + e.message);
@@ -81,6 +110,7 @@ export default function UpdateCV() {
         rebuild(updated);
         setIssues((prev) => prev.filter((x) => x !== issue));
         setViewMode('editable');
+        flash([issue.suggestion]);
         pushLog(`✅ Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
 
@@ -88,23 +118,33 @@ export default function UpdateCV() {
         if (!extractedText || issues.length === 0) return;
         let updated = extractedText;
         let count = 0;
+        const changed = [];
         for (const issue of issues) {
             if (updated.includes(issue.original)) {
                 updated = updated.split(issue.original).join(issue.suggestion);
+                changed.push(issue.suggestion);
                 count++;
             }
         }
         rebuild(updated);
         setIssues([]);
         setViewMode('editable');
+        flash(changed);
         pushLog(`✅ Applied ${count} fix(es)`);
+        pushMsg('assistant', `Applied ${count} fix(es). Changes are highlighted in green.`);
     };
 
+    // Replaces only the FIRST occurrence so identical words elsewhere aren't touched
     const handleInlineEdit = (oldValue, newValue) => {
         if (!oldValue || oldValue === newValue) return;
-        const updated = extractedText.split(oldValue).join(newValue);
+        if (!extractedText.includes(oldValue)) {
+            pushLog(`⚠️ Couldn't locate "${oldValue}" in source text`);
+            return;
+        }
+        const updated = extractedText.replace(oldValue, () => newValue);
         rebuild(updated);
         setIssues((prev) => prev.filter((x) => x.original !== oldValue));
+        flash([newValue]);
         pushLog(`✏️ Edited: "${oldValue}" → "${newValue}"`);
     };
 
@@ -114,20 +154,29 @@ export default function UpdateCV() {
             return;
         }
         setPrompting(true);
+        pushMsg('user', instruction);
         pushLog(`💬 ${instruction}`);
         try {
             const result = await improveCV(extractedText, instruction);
-            if (result.updatedText) {
+            if (result.updatedText && result.updatedText !== extractedText) {
+                const changed = diffLines(extractedText, result.updatedText);
                 rebuild(result.updatedText);
                 setIssues([]);
                 setViewMode('editable');
-                pushLog(`✅ AI updated the CV`);
+                flash(changed);
+                pushLog('✅ AI updated the CV');
+                pushMsg(
+                    'assistant',
+                    result.reply ||
+                    `Done! I updated ${changed.length} line(s). They're highlighted in green in the preview.`
+                );
             } else {
-                pushLog(`⚠️ AI returned no changes`);
+                pushLog('⚠️ AI returned no changes');
+                pushMsg('assistant', result.reply || "I didn't find anything to change for that. Could you be more specific?");
             }
         } catch (e) {
             pushLog(`❌ Prompt failed: ${e.message}`);
-            alert('Prompt failed: ' + e.message);
+            pushMsg('assistant', `Sorry, something went wrong: ${e.message}`);
         } finally {
             setPrompting(false);
         }
@@ -148,29 +197,31 @@ export default function UpdateCV() {
                             className={`h-2 w-2 rounded-full ${parsing ? 'animate-pulse bg-amber-500' : file ? 'bg-green-500' : 'bg-slate-300'
                                 }`}
                         />
-                        <h2 className="text-sm font-semibold text-slate-700">Preview</h2>
+                        <h2 className="text-sm font-semibold text-slate-700">Live Preview</h2>
 
                         {isPDF && (
                             <div className="ml-1 flex rounded-md border border-slate-300 bg-white p-0.5 text-[10px] font-medium">
-                                <button
-                                    onClick={() => setViewMode('original')}
-                                    className={`rounded px-2 py-0.5 ${viewMode === 'original' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    Original
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('editable')}
-                                    className={`rounded px-2 py-0.5 ${viewMode === 'editable' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    Editable
-                                </button>
+                                {['original', 'editable'].map((m) => (
+                                    <button
+                                        key={m}
+                                        onClick={() => setViewMode(m)}
+                                        className={`rounded px-2 py-0.5 capitalize ${viewMode === m ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                    >
+                                        {m}
+                                    </button>
+                                ))}
                             </div>
                         )}
 
                         {viewMode === 'editable' && (
                             <span className="text-[10px] text-slate-400">click any text to edit</span>
+                        )}
+
+                        {highlights.length > 0 && (
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                                ✨ Updated
+                            </span>
                         )}
 
                         {issues.length > 0 && (
@@ -208,9 +259,14 @@ export default function UpdateCV() {
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
                     {isPDF && viewMode === 'original' ? (
-                        <PDFPreview file={file} />
+                        <PDFPreview file={file} issues={issues} />
                     ) : (
-                        <CVPreview cv={cv} issues={issues} onInlineEdit={handleInlineEdit} />
+                        <CVPreview
+                            cv={cv}
+                            issues={issues}
+                            highlights={highlights}
+                            onInlineEdit={handleInlineEdit}
+                        />
                     )}
                 </div>
             </div>
@@ -270,9 +326,14 @@ export default function UpdateCV() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">3</span>
-                        <h3 className="text-sm font-semibold text-slate-800">Ask AI to change it</h3>
+                        <h3 className="text-sm font-semibold text-slate-800">CV Assistant</h3>
                     </div>
-                    <PromptBar onSubmit={handlePrompt} disabled={!cv || parsing || prompting} />
+                    <ChatBot
+                        messages={messages}
+                        busy={prompting}
+                        disabled={!cv || parsing}
+                        onSend={handlePrompt}
+                    />
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

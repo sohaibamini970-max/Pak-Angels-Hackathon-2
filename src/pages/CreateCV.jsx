@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import CVPreview from '../components/CVPreview';
-import PromptBar from '../components/PromptBar';
+import PromptBar from '../components/ChatBot';
 import { generateCV } from '../api/client';
 
 const EXAMPLES = [

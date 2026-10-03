@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function EditableText({ text, issues = [], onEdit, className = '' }) {
+export default function EditableText({ text, issues = [], highlights = [], onEdit, className = '' }) {
     const [editing, setEditing] = useState(null);
 
-    if (text === undefined || text === null || text === '') {
-        return <span className={className}>—</span>;
-    }
+    if (text === undefined || text === null || text === '') return null;
 
     const str = String(text);
 
@@ -22,7 +20,13 @@ export default function EditableText({ text, issues = [], onEdit, className = ''
         );
     }
 
+    // Green flash for text just changed by AI / fixes
+    const trimmed = str.trim();
+    const changed = trimmed.length > 2 && highlights.some((l) => l.includes(trimmed));
+
+    // Find first issue that appears in this string (ignore empty originals)
     const match = issues
+        .filter((issue) => issue.original)
         .map((issue) => ({ issue, idx: str.indexOf(issue.original) }))
         .find((m) => m.idx !== -1);
 
@@ -34,31 +38,40 @@ export default function EditableText({ text, issues = [], onEdit, className = ''
         return (
             <span className={className}>
                 {before && (
-                    <ClickableSpan text={before} onClick={() => setEditing({ target: before })} />
+                    <ClickableSpan text={before} changed={changed} onClick={() => setEditing({ target: before })} />
                 )}
                 <button
                     type="button"
+                    data-issue
                     onClick={() => setEditing({ target })}
-                    className="relative underline decoration-red-500 decoration-wavy decoration-2 bg-red-50/60 hover:bg-red-100/80 cursor-pointer"
+                    className="relative cursor-pointer bg-red-50/60 underline decoration-red-500 decoration-wavy decoration-2 hover:bg-red-100/80"
                     title={`${issue.type}: ${issue.original} → ${issue.suggestion}`}
                 >
                     {target}
                 </button>
                 {after && (
-                    <EditableText text={after} issues={issues} onEdit={onEdit} className={className} />
+                    <EditableText
+                        text={after}
+                        issues={issues}
+                        highlights={highlights}
+                        onEdit={onEdit}
+                        className={className}
+                    />
                 )}
             </span>
         );
     }
 
-    return <ClickableSpan text={str} onClick={() => setEditing({ target: str })} />;
+    return <ClickableSpan text={str} changed={changed} onClick={() => setEditing({ target: str })} />;
 }
 
-function ClickableSpan({ text, onClick }) {
+function ClickableSpan({ text, onClick, changed }) {
     return (
         <span
             onClick={onClick}
-            className="cursor-text rounded px-0.5 -mx-0.5 transition hover:bg-indigo-50"
+            data-changed={changed ? '' : undefined}
+            className={`-mx-0.5 cursor-text rounded px-0.5 transition-colors duration-700 hover:bg-indigo-50 ${changed ? 'bg-green-100 ring-1 ring-green-300' : ''
+                }`}
             title="Click to edit"
         >
             {text}
@@ -69,6 +82,7 @@ function ClickableSpan({ text, onClick }) {
 function EditableSpan({ target, onCommit, onCancel }) {
     const [draft, setDraft] = useState(target);
     const ref = useRef(null);
+    const done = useRef(false); // prevents double commit (Enter + blur)
 
     useEffect(() => {
         if (ref.current) {
@@ -77,23 +91,35 @@ function EditableSpan({ target, onCommit, onCancel }) {
         }
     }, []);
 
+    const commit = () => {
+        if (done.current) return;
+        done.current = true;
+        onCommit(draft);
+    };
+
+    const cancel = () => {
+        if (done.current) return;
+        done.current = true;
+        onCancel();
+    };
+
     return (
         <input
             ref={ref}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => onCommit(draft)}
+            onBlur={commit}
             onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    onCommit(draft);
+                    commit();
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
-                    onCancel();
+                    cancel();
                 }
             }}
             className="inline-block rounded border-2 border-indigo-500 bg-white px-1 text-inherit outline-none"
-            style={{ width: `${Math.max(draft.length, 4) + 2}ch` }}
+            style={{ width: `${Math.max(draft.length, 4) + 2}ch`, maxWidth: '100%' }}
         />
     );
 }
