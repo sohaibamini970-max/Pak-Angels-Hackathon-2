@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import UploadZone from '../components/UploadZone';
 import PDFPreview from '../components/PDFPreview';
 import CVPreview from '../components/CVPreview';
@@ -16,7 +16,7 @@ export default function UpdateCV() {
     const [issues, setIssues] = useState([]);
     const [checking, setChecking] = useState(false);
 
-    const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 20));
+    const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
 
     const handleFileSelected = async (f) => {
         setFile(f);
@@ -63,10 +63,19 @@ export default function UpdateCV() {
         }
     };
 
-    const handleDownload = async () => {
-        // Print the currently-rendered CV (PDF preview or generated preview)
+    const handleDownload = () => {
         pushLog('Opening print dialog…');
         setTimeout(() => window.print(), 100);
+    };
+
+    const applyFix = (issue) => {
+        if (!extractedText) return;
+        const updated = extractedText.replaceAll(issue.original, issue.suggestion);
+        setExtractedText(updated);
+        const structured = structureCV(updated);
+        setCv(structured);
+        setIssues((prev) => prev.filter((x) => x !== issue));
+        pushLog(`Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
 
     const handlePrompt = (text) => pushLog(`Prompt: ${text}`);
@@ -74,20 +83,21 @@ export default function UpdateCV() {
     const isPDF = file?.name?.toLowerCase().endsWith('.pdf');
 
     return (
-        <div className="grid h-full grid-cols-1 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid h-full min-h-0 grid-cols-1 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_380px]">
             {/* LEFT: Preview */}
             <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-slate-100">
                 <div className="flex items-center justify-between border-b border-slate-200 bg-white/60 px-5 py-3 backdrop-blur">
                     <div className="flex items-center gap-2">
                         <span
-                            className={`h-2 w-2 rounded-full ${parsing
-                                    ? 'animate-pulse bg-amber-500'
-                                    : file
-                                        ? 'bg-green-500'
-                                        : 'bg-slate-300'
+                            className={`h-2 w-2 rounded-full ${parsing ? 'animate-pulse bg-amber-500' : file ? 'bg-green-500' : 'bg-slate-300'
                                 }`}
                         />
                         <h2 className="text-sm font-semibold text-slate-700">Live Preview</h2>
+                        {isPDF && issues.length > 0 && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                                {issues.length} issue{issues.length !== 1 ? 's' : ''} — see list
+                            </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         {file && (
@@ -101,31 +111,35 @@ export default function UpdateCV() {
                                 Download
                             </button>
                         )}
-                        <span className="truncate text-[11px] text-slate-500">
+                        <span className="max-w-[140px] truncate text-[11px] text-slate-500">
                             {file ? file.name : 'No CV loaded'}
                         </span>
                     </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                    {isPDF ? <PDFPreview file={file} /> : <CVPreview cv={cv} />}
+                    {isPDF ? <PDFPreview file={file} /> : <CVPreview cv={cv} issues={issues} />}
                 </div>
             </div>
 
-            {/* RIGHT COLUMN */}
-            <div className="flex min-h-0 flex-col gap-4">
+            {/* RIGHT: column scrolls, cards have natural height */}
+            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
                 {/* ① Upload */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                            1
+                        </span>
                         <h3 className="text-sm font-semibold text-slate-800">Upload your CV</h3>
                     </div>
                     <UploadZone onFileSelected={handleFileSelected} fileName={file?.name} />
                 </div>
 
-                {/* ② Check Mistakes */}
+                {/* ② Check mistakes */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">2</span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                            2
+                        </span>
                         <h3 className="text-sm font-semibold text-slate-800">Check for mistakes</h3>
                     </div>
                     <button
@@ -137,7 +151,7 @@ export default function UpdateCV() {
                     </button>
 
                     {issues.length > 0 && (
-                        <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+                        <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
                             {issues.map((issue, i) => (
                                 <li key={i} className="rounded-md border border-red-100 bg-red-50 p-2.5 text-xs">
                                     <div className="flex items-center gap-1.5">
@@ -146,11 +160,17 @@ export default function UpdateCV() {
                                         </span>
                                     </div>
                                     <p className="mt-1.5 leading-snug text-slate-700">
-                                        <span className="line-through text-red-500">{issue.original}</span>
+                                        <span className="text-red-500 line-through">{issue.original}</span>
                                         <span className="mx-1 text-slate-400">→</span>
                                         <span className="font-semibold text-green-700">{issue.suggestion}</span>
                                     </p>
                                     <p className="mt-1 text-[11px] text-slate-500">{issue.explanation}</p>
+                                    <button
+                                        onClick={() => applyFix(issue)}
+                                        className="mt-1.5 rounded bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700"
+                                    >
+                                        Apply fix
+                                    </button>
                                 </li>
                             ))}
                         </ul>
@@ -166,19 +186,23 @@ export default function UpdateCV() {
                 {/* ③ Prompt */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">3</span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                            3
+                        </span>
                         <h3 className="text-sm font-semibold text-slate-800">Ask AI to improve it</h3>
                     </div>
                     <PromptBar onSubmit={handlePrompt} disabled={!file || parsing} />
                 </div>
 
-                {/* ④ Activity — fixed height, scrollable */}
-                <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {/* ④ Activity */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">4</span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                            4
+                        </span>
                         <h3 className="text-sm font-semibold text-slate-800">Activity</h3>
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="max-h-48 overflow-y-auto pr-1">
                         {log.length === 0 ? (
                             <p className="text-xs text-slate-400">No actions yet.</p>
                         ) : (
