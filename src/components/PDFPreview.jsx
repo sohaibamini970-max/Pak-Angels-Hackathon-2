@@ -9,7 +9,8 @@ const escapeHtml = (s) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export default function PDFPreview({ file, issues = [] }) {
+export default function PDFPreview({ file, issues: issuesProp }) {
+    const issues = Array.isArray(issuesProp) ? issuesProp : [];
     const [numPages, setNumPages] = useState(null);
     const [containerWidth, setContainerWidth] = useState(0);
     const containerRef = useRef(null);

@@ -8,14 +8,15 @@ const QUICK = [
   { label: '➕ Add experience', text: 'Add experience: ' },
 ];
 
-export default function ChatBot({ messages, busy, disabled, onSend }) {
+export default function ChatBot({ messages = [], busy = false, disabled = false, onSend }) {
+  const safeMessages = Array.isArray(messages) ? messages : [];
   const [input, setInput] = useState('');
   const endRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, busy]);
+  }, [safeMessages.length, busy]);
 
   const send = (text) => {
     const t = (text ?? input).trim();
@@ -46,7 +47,7 @@ export default function ChatBot({ messages, busy, disabled, onSend }) {
       </div>
 
       <div className="mb-3 h-64 space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">
-        {messages.map((m, i) => (
+        {safeMessages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${m.role === 'user'

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function EditableText({ text, issues = [], highlights = [], onEdit, className = '' }) {
+export default function EditableText({ text, issues: issuesProp, highlights: hlProp, onEdit, className = '' }) {
+    const issues = Array.isArray(issuesProp) ? issuesProp : [];
+    const highlights = Array.isArray(hlProp) ? hlProp : [];
     const [editing, setEditing] = useState(null);
 
     if (text === undefined || text === null || text === '') return null;

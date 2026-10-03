@@ -1,6 +1,19 @@
 import EditableText from './EditableText';
 
-export default function CVPreview({ cv, issues = [], highlights = [], onInlineEdit }) {
+// Always returns an array, whatever the input is (undefined, null, string, object)
+const arr = (v) => {
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string' && v.trim()) return v.split(/[,\n•·]/).map((s) => s.trim()).filter(Boolean);
+    return [];
+};
+
+// Always returns a string-safe value for rendering
+const str = (v) => (v === undefined || v === null ? '' : String(v));
+
+export default function CVPreview({ cv, issues: issuesProp, highlights: hlProp, onInlineEdit }) {
+    const issues = Array.isArray(issuesProp) ? issuesProp : [];
+    const highlights = Array.isArray(hlProp) ? hlProp : [];
+
     if (!cv) {
         return (
             <div className="mx-auto flex w-full max-w-[820px] min-h-[900px] items-center justify-center rounded-2xl bg-white p-12 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.15)]">
@@ -17,8 +30,24 @@ export default function CVPreview({ cv, issues = [], highlights = [], onInlineEd
         );
     }
 
+    // ---- Normalize everything up front ----
     const p = cv.personalInfo || {};
     const contact = [p.email, p.phone, p.location, p.linkedin, p.github].filter(Boolean);
+
+    const skillsObj = Array.isArray(cv.skills)
+        ? { technical: cv.skills, soft: [] }
+        : cv.skills && typeof cv.skills === 'object'
+            ? cv.skills
+            : {};
+
+    const experience = arr(cv.experience);
+    const education = arr(cv.education);
+    const projects = arr(cv.projects);
+    const certifications = arr(cv.certifications);
+    const languages = arr(cv.languages);
+    const awards = arr(cv.awards);
+    const technical = arr(skillsObj.technical);
+    const soft = arr(skillsObj.soft);
 
     // NOTE: plain function (not a component) so React doesn't remount on each render
     const E = (text) => (
@@ -29,7 +58,7 @@ export default function CVPreview({ cv, issues = [], highlights = [], onInlineEd
         <div id="cv-print" className="mx-auto w-full max-w-[820px] rounded-2xl bg-white p-12 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.15)]">
             <header className="mb-8 border-b border-slate-200 pb-5 text-center">
                 <h1 className="text-4xl font-bold tracking-tight text-slate-900">
-                    {E(p.name || 'Your Name')}
+                    {E(str(p.name) || 'Your Name')}
                 </h1>
                 {contact.length > 0 && (
                     <p className="mt-2 flex flex-wrap justify-center gap-x-2 text-xs text-slate-600">
@@ -43,52 +72,55 @@ export default function CVPreview({ cv, issues = [], highlights = [], onInlineEd
                 )}
             </header>
 
-            {cv.summary && (
+            {str(cv.summary) && (
                 <Section title="Summary">
-                    <p className="text-sm leading-relaxed text-slate-700">{E(cv.summary)}</p>
+                    <p className="text-sm leading-relaxed text-slate-700">{E(str(cv.summary))}</p>
                 </Section>
             )}
 
-            {cv.experience?.length > 0 && (
+            {experience.length > 0 && (
                 <Section title="Experience">
                     <div className="space-y-4">
-                        {cv.experience.map((e, i) => (
-                            <div key={e.id || i}>
-                                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                                    <span className="text-sm font-semibold text-slate-900">{E(e.role || 'Role')}</span>
-                                    {(e.startDate || e.endDate) && (
-                                        <span className="text-xs text-slate-600">
-                                            {E(e.startDate)}
-                                            {e.endDate && <> – {E(e.endDate)}</>}
-                                        </span>
+                        {experience.map((e, i) => {
+                            const bullets = arr(e?.bullets).filter(Boolean);
+                            return (
+                                <div key={e?.id || i}>
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                                        <span className="text-sm font-semibold text-slate-900">{E(str(e?.role) || 'Role')}</span>
+                                        {(e?.startDate || e?.endDate) && (
+                                            <span className="text-xs text-slate-600">
+                                                {E(str(e.startDate))}
+                                                {e.endDate && <> – {E(str(e.endDate))}</>}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {e?.company && <div className="text-xs italic text-slate-700">{E(str(e.company))}</div>}
+                                    {bullets.length > 0 && (
+                                        <ul className="ml-5 mt-1 list-disc space-y-0.5 text-sm text-slate-700">
+                                            {bullets.map((b, j) => (
+                                                <li key={j}>{E(str(b))}</li>
+                                            ))}
+                                        </ul>
                                     )}
                                 </div>
-                                {e.company && <div className="text-xs italic text-slate-700">{E(e.company)}</div>}
-                                {e.bullets?.filter(Boolean).length > 0 && (
-                                    <ul className="ml-5 mt-1 list-disc space-y-0.5 text-sm text-slate-700">
-                                        {e.bullets.filter(Boolean).map((b, j) => (
-                                            <li key={j}>{E(b)}</li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </Section>
             )}
 
-            {cv.education?.length > 0 && (
+            {education.length > 0 && (
                 <Section title="Education">
                     <div className="space-y-3">
-                        {cv.education.map((ed, i) => (
-                            <div key={ed.id || i} className="flex flex-wrap items-baseline justify-between gap-x-3">
+                        {education.map((ed, i) => (
+                            <div key={ed?.id || i} className="flex flex-wrap items-baseline justify-between gap-x-3">
                                 <div>
-                                    <div className="text-sm font-semibold text-slate-900">{E(ed.degree || 'Degree')}</div>
-                                    {ed.institution && <div className="text-xs italic text-slate-700">{E(ed.institution)}</div>}
+                                    <div className="text-sm font-semibold text-slate-900">{E(str(ed?.degree) || 'Degree')}</div>
+                                    {ed?.institution && <div className="text-xs italic text-slate-700">{E(str(ed.institution))}</div>}
                                 </div>
                                 <div className="text-right text-xs text-slate-600">
-                                    {E(ed.year)}
-                                    {ed.gpa && <div>GPA: {E(ed.gpa)}</div>}
+                                    {ed?.year && E(str(ed.year))}
+                                    {ed?.gpa && <div>GPA: {E(str(ed.gpa))}</div>}
                                 </div>
                             </div>
                         ))}
@@ -96,24 +128,24 @@ export default function CVPreview({ cv, issues = [], highlights = [], onInlineEd
                 </Section>
             )}
 
-            {cv.skills && (cv.skills.technical?.length > 0 || cv.skills.soft?.length > 0) && (
+            {(technical.length > 0 || soft.length > 0) && (
                 <Section title="Skills">
-                    {cv.skills.technical?.length > 0 && (
+                    {technical.length > 0 && (
                         <div className="mb-2">
                             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Technical</div>
                             <div className="flex flex-wrap gap-1.5">
-                                {cv.skills.technical.map((s, i) => (
-                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">{E(s)}</span>
+                                {technical.map((s, i) => (
+                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">{E(str(s))}</span>
                                 ))}
                             </div>
                         </div>
                     )}
-                    {cv.skills.soft?.length > 0 && (
+                    {soft.length > 0 && (
                         <div>
                             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Soft</div>
                             <div className="flex flex-wrap gap-1.5">
-                                {cv.skills.soft.map((s, i) => (
-                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">{E(s)}</span>
+                                {soft.map((s, i) => (
+                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">{E(str(s))}</span>
                                 ))}
                             </div>
                         </div>
@@ -121,57 +153,66 @@ export default function CVPreview({ cv, issues = [], highlights = [], onInlineEd
                 </Section>
             )}
 
-            {cv.projects?.length > 0 && (
+            {projects.length > 0 && (
                 <Section title="Projects">
                     <div className="space-y-3">
-                        {cv.projects.map((pr, i) => (
-                            <div key={pr.id || i}>
-                                <div className="flex flex-wrap items-baseline gap-x-2">
-                                    <span className="text-sm font-semibold text-slate-900">{E(pr.name)}</span>
-                                    {pr.link && <span className="text-xs text-indigo-600">{E(pr.link)}</span>}
+                        {projects.map((pr, i) => {
+                            const tech = arr(pr?.tech);
+                            return (
+                                <div key={pr?.id || i}>
+                                    <div className="flex flex-wrap items-baseline gap-x-2">
+                                        <span className="text-sm font-semibold text-slate-900">{E(str(pr?.name) || 'Project')}</span>
+                                        {pr?.link && <span className="text-xs text-indigo-600">{E(str(pr.link))}</span>}
+                                    </div>
+                                    {pr?.description && (
+                                        <p className="mt-0.5 text-sm text-slate-700">{E(str(pr.description))}</p>
+                                    )}
+                                    {tech.length > 0 && (
+                                        <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-slate-500">
+                                            {tech.map((t, k) => (
+                                                <span key={k}>
+                                                    {k > 0 && <span className="mr-1.5 text-slate-300">·</span>}
+                                                    {E(str(t))}
+                                                </span>
+                                            ))}
+                                        </p>
+                                    )}
                                 </div>
-                                {pr.description && <p className="mt-0.5 text-sm text-slate-700">{E(pr.description)}</p>}
-                                {pr.tech?.length > 0 && (
-                                    <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-slate-500">
-                                        {pr.tech.map((t, k) => (
-                                            <span key={k}>
-                                                {k > 0 && <span className="mr-1.5 text-slate-300">·</span>}
-                                                {E(t)}
-                                            </span>
-                                        ))}
-                                    </p>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </Section>
             )}
 
-            {cv.certifications?.length > 0 && (
+            {certifications.length > 0 && (
                 <Section title="Certifications">
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
-                        {cv.certifications.map((c, i) => <li key={i}>{E(c)}</li>)}
+                        {certifications.map((c, i) => (
+                            <li key={i}>{E(str(c))}</li>
+                        ))}
                     </ul>
                 </Section>
             )}
 
-            {cv.languages?.length > 0 && (
+            {languages.length > 0 && (
                 <Section title="Languages">
                     <p className="flex flex-wrap gap-x-1.5 text-sm text-slate-700">
-                        {cv.languages.map((l, i) => (
+                        {languages.map((l, i) => (
                             <span key={i}>
                                 {i > 0 && <span className="mr-1.5 text-slate-300">·</span>}
-                                {E(l)}
+                                {E(str(l))}
                             </span>
                         ))}
                     </p>
                 </Section>
             )}
 
-            {cv.awards?.length > 0 && (
+            {awards.length > 0 && (
                 <Section title="Awards">
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
-                        {cv.awards.map((a, i) => <li key={i}>{E(a)}</li>)}
+                        {awards.map((a, i) => (
+                            <li key={i}>{E(str(a))}</li>
+                        ))}
                     </ul>
                 </Section>
             )}
