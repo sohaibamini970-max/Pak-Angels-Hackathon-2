@@ -19,7 +19,6 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
 
     const p = cv.personalInfo || {};
     const contact = [p.email, p.phone, p.location, p.linkedin, p.github].filter(Boolean);
-
     const E = ({ children }) => (
         <EditableText text={children} issues={issues} onEdit={onInlineEdit} />
     );
@@ -44,9 +43,7 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
 
             {cv.summary && (
                 <Section title="Summary">
-                    <p className="text-sm leading-relaxed text-slate-700">
-                        <E>{cv.summary}</E>
-                    </p>
+                    <p className="text-sm leading-relaxed text-slate-700"><E>{cv.summary}</E></p>
                 </Section>
             )}
 
@@ -56,28 +53,17 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
                         {cv.experience.map((e, i) => (
                             <div key={e.id || i}>
                                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                                    <span className="text-sm font-semibold text-slate-900">
-                                        <E>{e.role || 'Role'}</E>
-                                    </span>
+                                    <span className="text-sm font-semibold text-slate-900"><E>{e.role || 'Role'}</E></span>
                                     {(e.startDate || e.endDate) && (
                                         <span className="text-xs text-slate-600">
-                                            <E>{e.startDate}</E>
-                                            {e.endDate ? ` – ${e.endDate}` : ''}
+                                            <E>{e.startDate}</E>{e.endDate ? ` – ${e.endDate}` : ''}
                                         </span>
                                     )}
                                 </div>
-                                {e.company && (
-                                    <div className="text-xs italic text-slate-700">
-                                        <E>{e.company}</E>
-                                    </div>
-                                )}
+                                {e.company && <div className="text-xs italic text-slate-700"><E>{e.company}</E></div>}
                                 {e.bullets?.filter(Boolean).length > 0 && (
                                     <ul className="ml-5 mt-1 list-disc space-y-0.5 text-sm text-slate-700">
-                                        {e.bullets.filter(Boolean).map((b, j) => (
-                                            <li key={j}>
-                                                <E>{b}</E>
-                                            </li>
-                                        ))}
+                                        {e.bullets.filter(Boolean).map((b, j) => <li key={j}><E>{b}</E></li>)}
                                     </ul>
                                 )}
                             </div>
@@ -92,22 +78,12 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
                         {cv.education.map((ed, i) => (
                             <div key={ed.id || i} className="flex flex-wrap items-baseline justify-between gap-x-3">
                                 <div>
-                                    <div className="text-sm font-semibold text-slate-900">
-                                        <E>{ed.degree || 'Degree'}</E>
-                                    </div>
-                                    {ed.institution && (
-                                        <div className="text-xs italic text-slate-700">
-                                            <E>{ed.institution}</E>
-                                        </div>
-                                    )}
+                                    <div className="text-sm font-semibold text-slate-900"><E>{ed.degree || 'Degree'}</E></div>
+                                    {ed.institution && <div className="text-xs italic text-slate-700"><E>{ed.institution}</E></div>}
                                 </div>
                                 <div className="text-right text-xs text-slate-600">
                                     <E>{ed.year}</E>
-                                    {ed.gpa && (
-                                        <div>
-                                            GPA: <E>{ed.gpa}</E>
-                                        </div>
-                                    )}
+                                    {ed.gpa && <div>GPA: <E>{ed.gpa}</E></div>}
                                 </div>
                             </div>
                         ))}
@@ -119,28 +95,20 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
                 <Section title="Skills">
                     {cv.skills.technical?.length > 0 && (
                         <div className="mb-2">
-                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Technical
-                            </div>
+                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Technical</div>
                             <div className="flex flex-wrap gap-1.5">
                                 {cv.skills.technical.map((s, i) => (
-                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">
-                                        <E>{s}</E>
-                                    </span>
+                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700"><E>{s}</E></span>
                                 ))}
                             </div>
                         </div>
                     )}
                     {cv.skills.soft?.length > 0 && (
                         <div>
-                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Soft
-                            </div>
+                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Soft</div>
                             <div className="flex flex-wrap gap-1.5">
                                 {cv.skills.soft.map((s, i) => (
-                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">
-                                        <E>{s}</E>
-                                    </span>
+                                    <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700"><E>{s}</E></span>
                                 ))}
                             </div>
                         </div>
@@ -154,23 +122,11 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
                         {cv.projects.map((pr, i) => (
                             <div key={pr.id || i}>
                                 <div className="flex flex-wrap items-baseline gap-x-2">
-                                    <span className="text-sm font-semibold text-slate-900">
-                                        <E>{pr.name}</E>
-                                    </span>
-                                    {pr.link && (
-                                        <span className="text-xs text-indigo-600">
-                                            <E>{pr.link}</E>
-                                        </span>
-                                    )}
+                                    <span className="text-sm font-semibold text-slate-900"><E>{pr.name}</E></span>
+                                    {pr.link && <span className="text-xs text-indigo-600"><E>{pr.link}</E></span>}
                                 </div>
-                                {pr.description && (
-                                    <p className="mt-0.5 text-sm text-slate-700">
-                                        <E>{pr.description}</E>
-                                    </p>
-                                )}
-                                {pr.tech?.length > 0 && (
-                                    <p className="mt-0.5 text-xs text-slate-500">{pr.tech.join(' · ')}</p>
-                                )}
+                                {pr.description && <p className="mt-0.5 text-sm text-slate-700"><E>{pr.description}</E></p>}
+                                {pr.tech?.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{pr.tech.join(' · ')}</p>}
                             </div>
                         ))}
                     </div>
@@ -180,31 +136,21 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
             {cv.certifications?.length > 0 && (
                 <Section title="Certifications">
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
-                        {cv.certifications.map((c, i) => (
-                            <li key={i}>
-                                <E>{c}</E>
-                            </li>
-                        ))}
+                        {cv.certifications.map((c, i) => <li key={i}><E>{c}</E></li>)}
                     </ul>
                 </Section>
             )}
 
             {cv.languages?.length > 0 && (
                 <Section title="Languages">
-                    <p className="text-sm text-slate-700">
-                        <E>{cv.languages.join(' · ')}</E>
-                    </p>
+                    <p className="text-sm text-slate-700"><E>{cv.languages.join(' · ')}</E></p>
                 </Section>
             )}
 
             {cv.awards?.length > 0 && (
                 <Section title="Awards">
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
-                        {cv.awards.map((a, i) => (
-                            <li key={i}>
-                                <E>{a}</E>
-                            </li>
-                        ))}
+                        {cv.awards.map((a, i) => <li key={i}><E>{a}</E></li>)}
                     </ul>
                 </Section>
             )}

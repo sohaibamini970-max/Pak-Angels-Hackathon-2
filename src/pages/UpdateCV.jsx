@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import UploadZone from '../components/UploadZone';
+import PDFPreview from '../components/PDFPreview';
 import CVPreview from '../components/CVPreview';
 import PromptBar from '../components/PromptBar';
 import { parseFile } from '../lib/parseFile';
@@ -15,9 +16,11 @@ export default function UpdateCV() {
     const [issues, setIssues] = useState([]);
     const [checking, setChecking] = useState(false);
     const [prompting, setPrompting] = useState(false);
+    const [viewMode, setViewMode] = useState('original'); // 'original' | 'editable'
 
     const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
 
+    const isPDF = file?.name?.toLowerCase().endsWith('.pdf');
     const rebuild = (text) => {
         setExtractedText(text);
         setCv(structureCV(text));
@@ -28,6 +31,7 @@ export default function UpdateCV() {
         setCv(null);
         setIssues([]);
         setExtractedText('');
+        setViewMode('original');
         setParsing(true);
         pushLog(`Loaded ${f.name}`);
 
@@ -59,6 +63,7 @@ export default function UpdateCV() {
                     ? `Found ${result.issues.length} issue(s)`
                     : '✅ No issues found'
             );
+            if (result.issues?.length > 0) setViewMode('editable');
         } catch (e) {
             pushLog(`❌ Check failed: ${e.message}`);
             alert('Check failed: ' + e.message);
@@ -75,6 +80,7 @@ export default function UpdateCV() {
         const updated = extractedText.split(issue.original).join(issue.suggestion);
         rebuild(updated);
         setIssues((prev) => prev.filter((x) => x !== issue));
+        setViewMode('editable');
         pushLog(`✅ Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
 
@@ -90,6 +96,7 @@ export default function UpdateCV() {
         }
         rebuild(updated);
         setIssues([]);
+        setViewMode('editable');
         pushLog(`✅ Applied ${count} fix(es)`);
     };
 
@@ -113,6 +120,7 @@ export default function UpdateCV() {
             if (result.updatedText) {
                 rebuild(result.updatedText);
                 setIssues([]);
+                setViewMode('editable');
                 pushLog(`✅ AI updated the CV`);
             } else {
                 pushLog(`⚠️ AI returned no changes`);
@@ -126,7 +134,7 @@ export default function UpdateCV() {
     };
 
     const handleDownload = () => {
-        pushLog('Opening print dialog…');
+        pushLog(`Downloading ${viewMode} view…`);
         setTimeout(() => window.print(), 100);
     };
 
@@ -137,15 +145,33 @@ export default function UpdateCV() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/60 px-5 py-3 backdrop-blur">
                     <div className="flex flex-wrap items-center gap-2">
                         <span
-                            className={`h-2 w-2 rounded-full ${parsing
-                                    ? 'animate-pulse bg-amber-500'
-                                    : file
-                                        ? 'bg-green-500'
-                                        : 'bg-slate-300'
+                            className={`h-2 w-2 rounded-full ${parsing ? 'animate-pulse bg-amber-500' : file ? 'bg-green-500' : 'bg-slate-300'
                                 }`}
                         />
-                        <h2 className="text-sm font-semibold text-slate-700">Live Preview</h2>
-                        <span className="text-[10px] text-slate-400">click any text to edit</span>
+                        <h2 className="text-sm font-semibold text-slate-700">Preview</h2>
+
+                        {isPDF && (
+                            <div className="ml-1 flex rounded-md border border-slate-300 bg-white p-0.5 text-[10px] font-medium">
+                                <button
+                                    onClick={() => setViewMode('original')}
+                                    className={`rounded px-2 py-0.5 ${viewMode === 'original' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                >
+                                    Original
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('editable')}
+                                    className={`rounded px-2 py-0.5 ${viewMode === 'editable' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                >
+                                    Editable
+                                </button>
+                            </div>
+                        )}
+
+                        {viewMode === 'editable' && (
+                            <span className="text-[10px] text-slate-400">click any text to edit</span>
+                        )}
 
                         {issues.length > 0 && (
                             <>
@@ -181,29 +207,27 @@ export default function UpdateCV() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                    <CVPreview cv={cv} issues={issues} onInlineEdit={handleInlineEdit} />
+                    {isPDF && viewMode === 'original' ? (
+                        <PDFPreview file={file} />
+                    ) : (
+                        <CVPreview cv={cv} issues={issues} onInlineEdit={handleInlineEdit} />
+                    )}
                 </div>
             </div>
 
             {/* RIGHT */}
             <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
-                {/* ① Upload */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
-                            1
-                        </span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span>
                         <h3 className="text-sm font-semibold text-slate-800">Upload your CV</h3>
                     </div>
                     <UploadZone onFileSelected={handleFileSelected} fileName={file?.name} />
                 </div>
 
-                {/* ② Check */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
-                            2
-                        </span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">2</span>
                         <h3 className="text-sm font-semibold text-slate-800">Check for mistakes</h3>
                     </div>
                     <button
@@ -243,26 +267,17 @@ export default function UpdateCV() {
                     )}
                 </div>
 
-                {/* ③ Prompt */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
-                            3
-                        </span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">3</span>
                         <h3 className="text-sm font-semibold text-slate-800">Ask AI to change it</h3>
                     </div>
-                    <PromptBar
-                        onSubmit={handlePrompt}
-                        disabled={!cv || parsing || prompting}
-                    />
+                    <PromptBar onSubmit={handlePrompt} disabled={!cv || parsing || prompting} />
                 </div>
 
-                {/* ④ Activity */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
-                            4
-                        </span>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">4</span>
                         <h3 className="text-sm font-semibold text-slate-800">Activity</h3>
                     </div>
                     <div className="max-h-48 overflow-y-auto pr-1">
@@ -271,10 +286,7 @@ export default function UpdateCV() {
                         ) : (
                             <ul className="space-y-1.5">
                                 {log.map((entry, i) => (
-                                    <li
-                                        key={i}
-                                        className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600"
-                                    >
+                                    <li key={i} className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
                                         {entry}
                                     </li>
                                 ))}
