@@ -1,6 +1,6 @@
-import HighlightedText from './HighlightedText';
+import EditableText from './EditableText';
 
-export default function CVPreview({ cv, issues = [] }) {
+export default function CVPreview({ cv, issues = [], onInlineEdit }) {
     if (!cv) {
         return (
             <div className="mx-auto flex w-full max-w-[820px] min-h-[900px] items-center justify-center rounded-2xl bg-white p-12 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.15)]">
@@ -19,20 +19,24 @@ export default function CVPreview({ cv, issues = [] }) {
 
     const p = cv.personalInfo || {};
     const contact = [p.email, p.phone, p.location, p.linkedin, p.github].filter(Boolean);
-    const H = ({ children }) => <HighlightedText text={children} issues={issues} />;
+
+    // Convenience wrapper
+    const E = ({ children }) => (
+        <EditableText text={children} issues={issues} onEdit={onInlineEdit} />
+    );
 
     return (
         <div id="cv-print" className="mx-auto w-full max-w-[820px] rounded-2xl bg-white p-12 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.15)]">
             <header className="mb-8 border-b border-slate-200 pb-5 text-center">
                 <h1 className="text-4xl font-bold tracking-tight text-slate-900">
-                    <H>{p.name || 'Your Name'}</H>
+                    <E>{p.name || 'Your Name'}</E>
                 </h1>
                 {contact.length > 0 && (
                     <p className="mt-2 flex flex-wrap justify-center gap-x-2 text-xs text-slate-600">
                         {contact.map((c, i) => (
                             <span key={i} className="flex items-center gap-2">
                                 {i > 0 && <span className="text-slate-300">·</span>}
-                                <H>{c}</H>
+                                <E>{c}</E>
                             </span>
                         ))}
                     </p>
@@ -42,7 +46,7 @@ export default function CVPreview({ cv, issues = [] }) {
             {cv.summary && (
                 <Section title="Summary">
                     <p className="text-sm leading-relaxed text-slate-700">
-                        <H>{cv.summary}</H>
+                        <E>{cv.summary}</E>
                     </p>
                 </Section>
             )}
@@ -54,25 +58,25 @@ export default function CVPreview({ cv, issues = [] }) {
                             <div key={e.id || i}>
                                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                                     <span className="text-sm font-semibold text-slate-900">
-                                        <H>{e.role || 'Role'}</H>
+                                        <E>{e.role || 'Role'}</E>
                                     </span>
                                     {(e.startDate || e.endDate) && (
                                         <span className="text-xs text-slate-600">
-                                            <H>{e.startDate}</H>
+                                            <E>{e.startDate}</E>
                                             {e.endDate ? ` – ${e.endDate}` : ''}
                                         </span>
                                     )}
                                 </div>
                                 {e.company && (
                                     <div className="text-xs italic text-slate-700">
-                                        <H>{e.company}</H>
+                                        <E>{e.company}</E>
                                     </div>
                                 )}
                                 {e.bullets?.filter(Boolean).length > 0 && (
                                     <ul className="ml-5 mt-1 list-disc space-y-0.5 text-sm text-slate-700">
                                         {e.bullets.filter(Boolean).map((b, j) => (
                                             <li key={j}>
-                                                <H>{b}</H>
+                                                <E>{b}</E>
                                             </li>
                                         ))}
                                     </ul>
@@ -90,19 +94,19 @@ export default function CVPreview({ cv, issues = [] }) {
                             <div key={ed.id || i} className="flex flex-wrap items-baseline justify-between gap-x-3">
                                 <div>
                                     <div className="text-sm font-semibold text-slate-900">
-                                        <H>{ed.degree || 'Degree'}</H>
+                                        <E>{ed.degree || 'Degree'}</E>
                                     </div>
                                     {ed.institution && (
                                         <div className="text-xs italic text-slate-700">
-                                            <H>{ed.institution}</H>
+                                            <E>{ed.institution}</E>
                                         </div>
                                     )}
                                 </div>
                                 <div className="text-right text-xs text-slate-600">
-                                    <H>{ed.year}</H>
+                                    <E>{ed.year}</E>
                                     {ed.gpa && (
                                         <div>
-                                            GPA: <H>{ed.gpa}</H>
+                                            GPA: <E>{ed.gpa}</E>
                                         </div>
                                     )}
                                 </div>
@@ -122,7 +126,7 @@ export default function CVPreview({ cv, issues = [] }) {
                             <div className="flex flex-wrap gap-1.5">
                                 {cv.skills.technical.map((s, i) => (
                                     <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">
-                                        <H>{s}</H>
+                                        <E>{s}</E>
                                     </span>
                                 ))}
                             </div>
@@ -136,7 +140,7 @@ export default function CVPreview({ cv, issues = [] }) {
                             <div className="flex flex-wrap gap-1.5">
                                 {cv.skills.soft.map((s, i) => (
                                     <span key={i} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">
-                                        <H>{s}</H>
+                                        <E>{s}</E>
                                     </span>
                                 ))}
                             </div>
@@ -152,17 +156,17 @@ export default function CVPreview({ cv, issues = [] }) {
                             <div key={pr.id || i}>
                                 <div className="flex flex-wrap items-baseline gap-x-2">
                                     <span className="text-sm font-semibold text-slate-900">
-                                        <H>{pr.name}</H>
+                                        <E>{pr.name}</E>
                                     </span>
                                     {pr.link && (
                                         <span className="text-xs text-indigo-600">
-                                            <H>{pr.link}</H>
+                                            <E>{pr.link}</E>
                                         </span>
                                     )}
                                 </div>
                                 {pr.description && (
                                     <p className="mt-0.5 text-sm text-slate-700">
-                                        <H>{pr.description}</H>
+                                        <E>{pr.description}</E>
                                     </p>
                                 )}
                                 {pr.tech?.length > 0 && (
@@ -179,7 +183,7 @@ export default function CVPreview({ cv, issues = [] }) {
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
                         {cv.certifications.map((c, i) => (
                             <li key={i}>
-                                <H>{c}</H>
+                                <E>{c}</E>
                             </li>
                         ))}
                     </ul>
@@ -189,7 +193,7 @@ export default function CVPreview({ cv, issues = [] }) {
             {cv.languages?.length > 0 && (
                 <Section title="Languages">
                     <p className="text-sm text-slate-700">
-                        <H>{cv.languages.join(' · ')}</H>
+                        <E>{cv.languages.join(' · ')}</E>
                     </p>
                 </Section>
             )}
@@ -199,7 +203,7 @@ export default function CVPreview({ cv, issues = [] }) {
                     <ul className="ml-5 list-disc space-y-0.5 text-sm text-slate-700">
                         {cv.awards.map((a, i) => (
                             <li key={i}>
-                                <H>{a}</H>
+                                <E>{a}</E>
                             </li>
                         ))}
                     </ul>

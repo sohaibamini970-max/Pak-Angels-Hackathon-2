@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import UploadZone from '../components/UploadZone';
-import PDFPreview from '../components/PDFPreview';
 import CVPreview from '../components/CVPreview';
 import PromptBar from '../components/PromptBar';
 import { parseFile } from '../lib/parseFile';
 import { structureCV } from '../lib/structureCV';
-import { checkMistakes } from '../api/client';
+import { checkMistakes, improveCV } from '../api/client';
 
 export default function UpdateCV() {
     const [file, setFile] = useState(null);
@@ -15,7 +14,7 @@ export default function UpdateCV() {
     const [extractedText, setExtractedText] = useState('');
     const [issues, setIssues] = useState([]);
     const [checking, setChecking] = useState(false);
-    const [viewMode, setViewMode] = useState('pdf'); // 'pdf' | 'text'
+    const [prompting, setPrompting] = useState(false);
 
     const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
 
@@ -24,7 +23,6 @@ export default function UpdateCV() {
         setCv(null);
         setIssues([]);
         setExtractedText('');
-        setViewMode(f.name?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text');
         setParsing(true);
         pushLog(`Loaded ${f.name}`);
 
@@ -43,7 +41,7 @@ export default function UpdateCV() {
 
     const runCheck = async () => {
         if (!extractedText) {
-            alert('No text extracted from the CV. Upload a PDF or DOCX first.');
+            alert('No text extracted from the CV.');
             return;
         }
         setChecking(true);
@@ -57,8 +55,6 @@ export default function UpdateCV() {
                     ? `Found ${result.issues.length} issue(s)`
                     : '✅ No issues found'
             );
-            // Auto-switch to text view so the fixes are visible
-            if (result.issues?.length > 0) setViewMode('text');
         } catch (e) {
             pushLog(`❌ Check failed: ${e.message}`);
             alert('Check failed: ' + e.message);
@@ -73,28 +69,19 @@ export default function UpdateCV() {
     };
 
     /**
-     * Apply a single fix:
-     * 1. Replace in extracted text
-     * 2. Re-parse to a fresh structured CV
-     * 3. Remove the issue from the list
-     * 4. Force text view so the change is visible
+     * Apply a fix by replacing `original` with `suggestion` in the CV.
      */
     const applyFix = (issue) => {
-        if (!extractedText) return;
-        if (!extractedText.includes(issue.original)) {
-            pushLog(`⚠️ "${issue.original}" no longer found in text`);
-            setIssues((prev) => prev.filter((x) => x !== issue));
-            return;
-        }
-        const updated = extractedText.split(issue.original).join(issue.suggestion);
-        setExtractedText(updated);
-        const structured = structureCV(updated);
-        setCv(structured);
+        const updatedText = extractedText.split(issue.original).join(issue.suggestion);
+        setExtractedText(updatedText);
+        setCv(structureCV(updatedText));
         setIssues((prev) => prev.filter((x) => x !== issue));
-        setViewMode('text');
         pushLog(`✅ Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
 
+    /**
+     * Fix all issues in one shot.
+     */
     const applyAllFixes = () => {
         if (!extractedText || issues.length === 0) return;
         let updated = extractedText;
@@ -108,14 +95,50 @@ export default function UpdateCV() {
         setExtractedText(updated);
         setCv(structureCV(updated));
         setIssues([]);
-        setViewMode('text');
         pushLog(`✅ Applied ${count} fix(es)`);
     };
 
-    const handlePrompt = (text) => pushLog(`Prompt: ${text}`);
+    /**
+     * Inline edit: called when the user types a new value directly in the preview.
+     */
+    const handleInlineEdit = (oldValue, newValue) => {
+        if (!oldValue || oldValue === newValue) return;
+        const updated = extractedText.split(oldValue).join(newValue);
+        setExtractedText(updated);
+        setCv(structureCV(updated));
+        // Drop any issue whose original matches the old value
+        setIssues((prev) => prev.filter((x) => x.original !== oldValue));
+        pushLog(`✏️ Edited: "${oldValue}" → "${newValue}"`);
+    };
 
-    const isPDF = file?.name?.toLowerCase().endsWith('.pdf');
-    const showPDF = isPDF && viewMode === 'pdf';
+    /**
+     * Chatbot prompt: sends the current CV text + user instruction to Gemini,
+     * gets back updated CV text, replaces everything.
+     */
+    const handlePrompt = async (instruction) => {
+        if (!extractedText) {
+            alert('Upload a CV first.');
+            return;
+        }
+        setPrompting(true);
+        pushLog(`💬 Prompt: "${instruction}"`);
+        try {
+            const result = await improveCV(extractedText, instruction);
+            if (result.updatedText) {
+                setExtractedText(result.updatedText);
+                setCv(structureCV(result.updatedText));
+                setIssues([]);
+                pushLog(`✅ CV updated by AI`);
+            } else {
+                pushLog(`⚠️ AI returned no changes`);
+            }
+        } catch (e) {
+            pushLog(`❌ Prompt failed: ${e.message}`);
+            alert('Prompt failed: ' + e.message);
+        } finally {
+            setPrompting(false);
+        }
+    };
 
     return (
         <div className="grid h-full min-h-0 grid-cols-1 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -128,30 +151,18 @@ export default function UpdateCV() {
                                 }`}
                         />
                         <h2 className="text-sm font-semibold text-slate-700">Live Preview</h2>
-
-                        {isPDF && (
-                            <div className="ml-2 flex rounded-md border border-slate-300 bg-white p-0.5 text-[10px] font-medium">
-                                <button
-                                    onClick={() => setViewMode('pdf')}
-                                    className={`rounded px-2 py-0.5 ${viewMode === 'pdf' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    Original
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('text')}
-                                    className={`rounded px-2 py-0.5 ${viewMode === 'text' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    Editable
-                                </button>
-                            </div>
-                        )}
-
                         {issues.length > 0 && (
                             <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
                                 {issues.length} issue{issues.length !== 1 ? 's' : ''}
                             </span>
+                        )}
+                        {issues.length > 0 && (
+                            <button
+                                onClick={applyAllFixes}
+                                className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700"
+                            >
+                                Fix all
+                            </button>
                         )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -173,11 +184,7 @@ export default function UpdateCV() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                    {showPDF ? (
-                        <PDFPreview file={file} />
-                    ) : (
-                        <CVPreview cv={cv} issues={issues} />
-                    )}
+                    <CVPreview cv={cv} issues={issues} onInlineEdit={handleInlineEdit} />
                 </div>
             </div>
 
@@ -202,25 +209,13 @@ export default function UpdateCV() {
                         </span>
                         <h3 className="text-sm font-semibold text-slate-800">Check for mistakes</h3>
                     </div>
-
-                    <div className="flex gap-2">
-                        <button
-                            onClick={runCheck}
-                            disabled={!extractedText || checking}
-                            className="flex-1 rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-red-600 disabled:bg-slate-300"
-                        >
-                            {checking ? 'Checking…' : 'Find issues'}
-                        </button>
-                        {issues.length > 1 && (
-                            <button
-                                onClick={applyAllFixes}
-                                className="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-700"
-                                title="Apply all fixes"
-                            >
-                                Fix all
-                            </button>
-                        )}
-                    </div>
+                    <button
+                        onClick={runCheck}
+                        disabled={!extractedText || checking}
+                        className="w-full rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-red-600 disabled:bg-slate-300"
+                    >
+                        {checking ? 'Checking…' : 'Find issues'}
+                    </button>
 
                     {issues.length > 0 && (
                         <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
@@ -261,9 +256,12 @@ export default function UpdateCV() {
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
                             3
                         </span>
-                        <h3 className="text-sm font-semibold text-slate-800">Ask AI to improve it</h3>
+                        <h3 className="text-sm font-semibold text-slate-800">Ask AI to change it</h3>
                     </div>
-                    <PromptBar onSubmit={handlePrompt} disabled={!file || parsing} />
+                    <PromptBar
+                        onSubmit={handlePrompt}
+                        disabled={!cv || parsing || prompting}
+                    />
                 </div>
 
                 {/* ④ Activity */}
