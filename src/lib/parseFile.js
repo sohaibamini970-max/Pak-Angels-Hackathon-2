@@ -14,7 +14,7 @@ async function parsePDF(file) {
         const lines = await extractPdfLines(file);
         return lines.map((l) => l.text).join('\n');
     }
-
+s
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
