@@ -1,13 +1,45 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 @media print {
   body * {
-    visibility: hidden !important;
+    visibility: hidden;
   }
 
   #cv-print,
   #cv-print *,
   #pdf-print,
   #pdf-print * {
-    visibility: visible !important;
+    visibility: visible;
   }
 
   #cv-print,
@@ -16,18 +48,11 @@
     left: 0;
     top: 0;
     width: 100%;
-    max-width: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
   }
 
-  /* hide error / change highlights in the printed CV */
-  [data-issue],
-  [data-changed] {
-    background: transparent !important;
-    text-decoration: none !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
-    --tw-ring-shadow: 0 0 #0000 !important;
+  @page {
+    margin: 12mm;
   }
 }
