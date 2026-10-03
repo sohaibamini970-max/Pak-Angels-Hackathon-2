@@ -18,6 +18,11 @@ export default function UpdateCV() {
 
     const pushLog = (entry) => setLog((l) => [entry, ...l].slice(0, 30));
 
+    const rebuild = (text) => {
+        setExtractedText(text);
+        setCv(structureCV(text));
+    };
+
     const handleFileSelected = async (f) => {
         setFile(f);
         setCv(null);
@@ -28,12 +33,11 @@ export default function UpdateCV() {
 
         try {
             const text = await parseFile(f);
-            setExtractedText(text);
-            const structured = structureCV(text);
-            setCv(structured);
+            rebuild(text);
             pushLog(`Extracted ${text.length} chars`);
         } catch (e) {
-            pushLog(`Note: text extraction failed (${e.message}).`);
+            pushLog(`❌ Parse failed: ${e.message}`);
+            alert('Parse failed: ' + e.message);
         } finally {
             setParsing(false);
         }
@@ -41,7 +45,7 @@ export default function UpdateCV() {
 
     const runCheck = async () => {
         if (!extractedText) {
-            alert('No text extracted from the CV.');
+            alert('Upload a CV first.');
             return;
         }
         setChecking(true);
@@ -63,25 +67,17 @@ export default function UpdateCV() {
         }
     };
 
-    const handleDownload = () => {
-        pushLog('Opening print dialog…');
-        setTimeout(() => window.print(), 100);
-    };
-
-    /**
-     * Apply a fix by replacing `original` with `suggestion` in the CV.
-     */
     const applyFix = (issue) => {
-        const updatedText = extractedText.split(issue.original).join(issue.suggestion);
-        setExtractedText(updatedText);
-        setCv(structureCV(updatedText));
+        if (!extractedText.includes(issue.original)) {
+            setIssues((prev) => prev.filter((x) => x !== issue));
+            return;
+        }
+        const updated = extractedText.split(issue.original).join(issue.suggestion);
+        rebuild(updated);
         setIssues((prev) => prev.filter((x) => x !== issue));
         pushLog(`✅ Fixed: "${issue.original}" → "${issue.suggestion}"`);
     };
 
-    /**
-     * Fix all issues in one shot.
-     */
     const applyAllFixes = () => {
         if (!extractedText || issues.length === 0) return;
         let updated = extractedText;
@@ -92,43 +88,32 @@ export default function UpdateCV() {
                 count++;
             }
         }
-        setExtractedText(updated);
-        setCv(structureCV(updated));
+        rebuild(updated);
         setIssues([]);
         pushLog(`✅ Applied ${count} fix(es)`);
     };
 
-    /**
-     * Inline edit: called when the user types a new value directly in the preview.
-     */
     const handleInlineEdit = (oldValue, newValue) => {
         if (!oldValue || oldValue === newValue) return;
         const updated = extractedText.split(oldValue).join(newValue);
-        setExtractedText(updated);
-        setCv(structureCV(updated));
-        // Drop any issue whose original matches the old value
+        rebuild(updated);
         setIssues((prev) => prev.filter((x) => x.original !== oldValue));
         pushLog(`✏️ Edited: "${oldValue}" → "${newValue}"`);
     };
 
-    /**
-     * Chatbot prompt: sends the current CV text + user instruction to Gemini,
-     * gets back updated CV text, replaces everything.
-     */
     const handlePrompt = async (instruction) => {
         if (!extractedText) {
             alert('Upload a CV first.');
             return;
         }
         setPrompting(true);
-        pushLog(`💬 Prompt: "${instruction}"`);
+        pushLog(`💬 ${instruction}`);
         try {
             const result = await improveCV(extractedText, instruction);
             if (result.updatedText) {
-                setExtractedText(result.updatedText);
-                setCv(structureCV(result.updatedText));
+                rebuild(result.updatedText);
                 setIssues([]);
-                pushLog(`✅ CV updated by AI`);
+                pushLog(`✅ AI updated the CV`);
             } else {
                 pushLog(`⚠️ AI returned no changes`);
             }
@@ -140,31 +125,43 @@ export default function UpdateCV() {
         }
     };
 
+    const handleDownload = () => {
+        pushLog('Opening print dialog…');
+        setTimeout(() => window.print(), 100);
+    };
+
     return (
         <div className="grid h-full min-h-0 grid-cols-1 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_380px]">
             {/* LEFT: Preview */}
             <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-slate-100">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/60 px-5 py-3 backdrop-blur">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <span
-                            className={`h-2 w-2 rounded-full ${parsing ? 'animate-pulse bg-amber-500' : file ? 'bg-green-500' : 'bg-slate-300'
+                            className={`h-2 w-2 rounded-full ${parsing
+                                    ? 'animate-pulse bg-amber-500'
+                                    : file
+                                        ? 'bg-green-500'
+                                        : 'bg-slate-300'
                                 }`}
                         />
                         <h2 className="text-sm font-semibold text-slate-700">Live Preview</h2>
+                        <span className="text-[10px] text-slate-400">click any text to edit</span>
+
                         {issues.length > 0 && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
-                                {issues.length} issue{issues.length !== 1 ? 's' : ''}
-                            </span>
-                        )}
-                        {issues.length > 0 && (
-                            <button
-                                onClick={applyAllFixes}
-                                className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700"
-                            >
-                                Fix all
-                            </button>
+                            <>
+                                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                                    {issues.length} issue{issues.length !== 1 ? 's' : ''}
+                                </span>
+                                <button
+                                    onClick={applyAllFixes}
+                                    className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700"
+                                >
+                                    Fix all
+                                </button>
+                            </>
                         )}
                     </div>
+
                     <div className="flex items-center gap-2">
                         {file && (
                             <button
@@ -178,7 +175,7 @@ export default function UpdateCV() {
                             </button>
                         )}
                         <span className="max-w-[140px] truncate text-[11px] text-slate-500">
-                            {file ? file.name : 'No CV loaded'}
+                            {file ? file.name : 'No CV'}
                         </span>
                     </div>
                 </div>
@@ -201,7 +198,7 @@ export default function UpdateCV() {
                     <UploadZone onFileSelected={handleFileSelected} fileName={file?.name} />
                 </div>
 
-                {/* ② Check mistakes */}
+                {/* ② Check */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center gap-2">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
@@ -212,7 +209,7 @@ export default function UpdateCV() {
                     <button
                         onClick={runCheck}
                         disabled={!extractedText || checking}
-                        className="w-full rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-red-600 disabled:bg-slate-300"
+                        className="w-full rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white hover:bg-red-600 disabled:bg-slate-300"
                     >
                         {checking ? 'Checking…' : 'Find issues'}
                     </button>
@@ -221,12 +218,10 @@ export default function UpdateCV() {
                         <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
                             {issues.map((issue, i) => (
                                 <li key={i} className="rounded-md border border-red-100 bg-red-50 p-2.5 text-xs">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-800">
-                                            {issue.type}
-                                        </span>
-                                    </div>
-                                    <p className="mt-1.5 leading-snug text-slate-700">
+                                    <span className="rounded bg-red-200 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-800">
+                                        {issue.type}
+                                    </span>
+                                    <p className="mt-1.5 text-slate-700">
                                         <span className="text-red-500 line-through">{issue.original}</span>
                                         <span className="mx-1 text-slate-400">→</span>
                                         <span className="font-semibold text-green-700">{issue.suggestion}</span>
@@ -236,7 +231,7 @@ export default function UpdateCV() {
                                         onClick={() => applyFix(issue)}
                                         className="mt-1.5 rounded bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700"
                                     >
-                                        Apply fix
+                                        Apply
                                     </button>
                                 </li>
                             ))}
@@ -244,9 +239,7 @@ export default function UpdateCV() {
                     )}
 
                     {!checking && issues.length === 0 && extractedText && (
-                        <p className="mt-2 text-[11px] text-slate-400">
-                            Click the button above to scan your CV.
-                        </p>
+                        <p className="mt-2 text-[11px] text-slate-400">Click above to scan.</p>
                     )}
                 </div>
 

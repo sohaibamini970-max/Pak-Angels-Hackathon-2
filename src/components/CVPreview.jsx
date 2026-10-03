@@ -20,7 +20,6 @@ export default function CVPreview({ cv, issues = [], onInlineEdit }) {
     const p = cv.personalInfo || {};
     const contact = [p.email, p.phone, p.location, p.linkedin, p.github].filter(Boolean);
 
-    // Convenience wrapper
     const E = ({ children }) => (
         <EditableText text={children} issues={issues} onEdit={onInlineEdit} />
     );
