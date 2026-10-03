@@ -6,8 +6,16 @@ export default async function handler(req, res) {
   const { prompt } = req.body || {};
   if (!prompt?.trim()) return res.status(400).json({ error: 'Missing prompt' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Server API key not configured' });
+  const rawKey = process.env.GEMINI_API_KEY;
+  if (!rawKey) return res.status(500).json({ error: 'Server API key not configured' });
+
+  // Trim and strip accidental quotes from the env value
+  const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
+
+  // Diagnostics — remove these once it works
+  console.log('KEY LENGTH:', apiKey.length);
+  console.log('KEY PREFIX:', apiKey.slice(0, 6));
+  console.log('KEY SUFFIX:', apiKey.slice(-4));
 
   const schema = {
     type: 'object',
@@ -104,33 +112,58 @@ export default async function handler(req, res) {
     },
   };
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
-    if (!r.ok) {
-      const detail = await r.text();
-      return res.status(500).json({ error: 'Gemini error', detail });
+  for (const model of models) {
+    try {
+      // Use the x-goog-api-key header (the modern, safe way)
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!r.ok) {
+        const detail = await r.text();
+        console.error(`[${model}] ${r.status}:`, detail.slice(0, 400));
+
+        // If model doesn't exist, try the next one
+        if (r.status === 404) continue;
+
+        // Otherwise, surface the error to the client
+        return res.status(r.status).json({
+          error: `Gemini error (${model})`,
+          detail,
+        });
+      }
+
+      const data = await r.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        return res.status(500).json({
+          error: 'Empty response from Gemini',
+          detail: JSON.stringify(data).slice(0, 400),
+        });
+      }
+
+      const parsed = JSON.parse(text);
+      const uid = () => Math.random().toString(36).slice(2, 10);
+      parsed.experience = (parsed.experience || []).map((e) => ({ ...e, id: uid() }));
+      parsed.education = (parsed.education || []).map((e) => ({ ...e, id: uid() }));
+      parsed.projects = (parsed.projects || []).map((e) => ({ ...e, id: uid() }));
+
+      return res.status(200).json(parsed);
+    } catch (e) {
+      console.error(`[${model}] threw:`, e);
+      return res.status(500).json({ error: 'Server error', detail: String(e) });
     }
-
-    const data = await r.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return res.status(500).json({ error: 'Empty response from Gemini', detail: JSON.stringify(data) });
-    }
-
-    const parsed = JSON.parse(text);
-    const uid = () => Math.random().toString(36).slice(2, 10);
-    parsed.experience = (parsed.experience || []).map((e) => ({ ...e, id: uid() }));
-    parsed.education = (parsed.education || []).map((e) => ({ ...e, id: uid() }));
-    parsed.projects = (parsed.projects || []).map((e) => ({ ...e, id: uid() }));
-
-    res.status(200).json(parsed);
-  } catch (e) {
-    res.status(500).json({ error: 'Server error', detail: String(e) });
   }
+
+  return res.status(500).json({
+    error: 'No compatible Gemini model available for this API key',
+  });
 }
