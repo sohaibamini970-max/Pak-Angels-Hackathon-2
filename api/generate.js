@@ -119,15 +119,13 @@ export default async function handler(req, res) {
       // FIXED: use ${model} so the fallback actually tries different models
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-      const r = await fetch(url, {
+      const r = await fetch(`${url}?key=${apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
         },
         body: JSON.stringify(body),
       });
-
       if (!r.ok) {
         const detail = await r.text();
         console.error(`[${model}] ${r.status}:`, detail.slice(0, 400));
