@@ -116,8 +116,9 @@ export default async function handler(req, res) {
 
   for (const model of models) {
     try {
-      // Use the x-goog-api-key header (the modern, safe way)
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      // FIXED: use ${model} so the fallback actually tries different models
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
       const r = await fetch(url, {
         method: 'POST',
         headers: {
@@ -131,8 +132,8 @@ export default async function handler(req, res) {
         const detail = await r.text();
         console.error(`[${model}] ${r.status}:`, detail.slice(0, 400));
 
-        // If model doesn't exist, try the next one
-        if (r.status === 404) continue;
+        // If model doesn't exist or isn't available, try the next one
+        if (r.status === 404 || r.status === 400) continue;
 
         // Otherwise, surface the error to the client
         return res.status(r.status).json({
