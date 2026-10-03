@@ -54,4 +54,33 @@ body {
     box-shadow: none !important;
     border-radius: 0 !important;
   }
+    @media print {
+  
+      /* Hide everything */
+      body * {
+        visibility: hidden;
+      }
+  
+      /* Show only the CV preview */
+      #cv-print,
+      #cv-print *,
+      #pdf-print,
+      #pdf-print * {
+        visibility: visible;
+      }
+  
+      #cv-print,
+      #pdf-print {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+  
+      @page {
+        margin: 12mm;
+      }
+    }
 }

@@ -16,3 +16,17 @@ export async function generateCV(prompt) {
 
     return r.json();
 }
+
+export async function checkMistakes(text) {
+    const r = await fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+        console.error('Check API error:', err);
+        throw new Error(err.detail || err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
