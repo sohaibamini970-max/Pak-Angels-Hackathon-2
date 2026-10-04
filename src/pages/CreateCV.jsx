@@ -1,25 +1,12 @@
 import { useState } from 'react';
 import CVPreview from '../components/CVPreview';
-import PromptBar from '../components/ChatBot';
+import PromptInput from '../components/PromptInput';
 import { generateCV, improveCV } from '../api/client';
 
 const EXAMPLES = [
   {
     label: 'CS student',
-    text: `I am Muhammad Suhaib, a final-year Computer Science student at Sir Syed University of Engineering & Technology in Karachi, Pakistan. Passionate about software and application development, specializing in generative and agentic AI.
-
-EDUCATION:
-- BS Computer Science, Sir Syed University of Engineering & Technology, Karachi (2024 – present), CGPA 3.86
-- Intermediate (Pre-Engineering), Govt Islamia Science College (2022 – 2023)
-- Matriculation (Science), New Millennium Secondary School (2016 – 2021)
-
-SKILLS: C++, C#, JavaScript, TypeScript, Python, React, React Native, Node.js, Express.js, .NET Core MVC, Kotlin, Jetpack Compose, PostgreSQL, MongoDB, MySQL, SQL Server, Generative AI, Agentic AI, RAG.
-
-EXPERIENCE: Completed a 4-week AI Mentorship Program focused on full-stack web development and agentic AI. Built a full-stack platform with an autonomous tool-calling chatbot using semantic vector search and RAG.
-
-PROJECTS: Sir Syed University Student App (React Native, Node.js, MongoDB); Sales Management System AI-powered (React, Node.js, PostgreSQL, Google AI Studio API); RAG AI Agent (Python, FastAPI, pgvector, Gemini API); Food Ordering App (Kotlin, Jetpack Compose, Node.js, MongoDB).
-
-CONTACT: sohaibamini970@gmail.com, 0302-2623033, Nazimabad, Karachi. GitHub: sohaibamini970-max`,
+    text: 'I am a 3rd year Computer Science student at FAST University in Karachi. I interned at Systems Limited in summer 2024 working on React dashboards for internal analytics. My skills include JavaScript, React, Python, Node.js, and Tailwind CSS. I won 2nd place in my university hackathon in 2023 with a food delivery app built in React Native. Expected graduation 2026, current CGPA 3.7.',
   },
   {
     label: 'Frontend engineer',
@@ -51,9 +38,7 @@ export default function CreateCV() {
     try {
       const data = await generateCV(prompt);
       setCv(data);
-      // Build a plain text version for the chatbot to work with later
-      const flat = flattenCV(data);
-      setRawText(flat);
+      setRawText(flattenCV(data));
 
       const counts = {
         exp: data.experience?.length || 0,
@@ -81,9 +66,7 @@ export default function CreateCV() {
       const result = await improveCV(rawText, instruction);
       if (result.updatedText) {
         setRawText(result.updatedText);
-        // Rebuild the structured CV from updated text
-        const parsed = textToCV(result.updatedText);
-        setCv(parsed);
+        setCv(textToCV(result.updatedText));
         pushLog(`✅ AI updated the CV`);
       }
     } catch (e) {
@@ -120,9 +103,6 @@ export default function CreateCV() {
             <h2 className="text-sm font-semibold text-slate-700">
               {loading ? 'Generating…' : prompting ? 'Updating…' : 'Live Preview'}
             </h2>
-            {cv && (
-              <span className="text-[10px] text-slate-400">click any text to edit</span>
-            )}
           </div>
           <div className="flex items-center gap-2">
             {cv && (
@@ -154,37 +134,37 @@ export default function CreateCV() {
         </div>
       </div>
 
-      {/* RIGHT: prompt + activity (scrollable) */}
+      {/* RIGHT */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
-        {/* ① Generate from prompt */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
-              1
-            </span>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span>
             <h3 className="text-sm font-semibold text-slate-800">Describe yourself</h3>
           </div>
-          <PromptBar
+          <PromptInput
             onSubmit={handleGenerate}
             disabled={busy}
             examples={EXAMPLES}
+            placeholder="e.g. 3rd year CS student in Karachi. Interned at Systems Ltd summer 2024 on React dashboards. Skills: JS, Python, React."
           />
         </div>
 
-        {/* ② Ask AI to change it */}
         {cv && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
-                2
-              </span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">2</span>
               <h3 className="text-sm font-semibold text-slate-800">Ask AI to change it</h3>
             </div>
-            <PromptBar onSubmit={handleChat} disabled={busy} />
+            <PromptInput
+              onSubmit={handleChat}
+              disabled={busy}
+              label="What to change?"
+              placeholder="e.g. make the summary more senior"
+              rows={4}
+            />
           </div>
         )}
 
-        {/* ③ Activity */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
@@ -200,10 +180,7 @@ export default function CreateCV() {
             ) : (
               <ul className="space-y-1.5">
                 {log.map((entry, i) => (
-                  <li
-                    key={i}
-                    className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600"
-                  >
+                  <li key={i} className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
                     {entry}
                   </li>
                 ))}
@@ -212,12 +189,10 @@ export default function CreateCV() {
           </div>
         </div>
 
-        {/* Tip */}
         {!cv && (
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
             <p className="text-[11px] leading-relaxed text-indigo-900">
-              <span className="font-semibold">Tip:</span> include education, internships, tech
-              stack, projects, and achievements — the more specific, the better the result.
+              <span className="font-semibold">Tip:</span> include education, internships, tech stack, projects, and achievements — the more specific, the better the result.
             </p>
           </div>
         )}
@@ -228,7 +203,6 @@ export default function CreateCV() {
 
 /* ---------- Helpers ---------- */
 
-/** Flatten a structured CV into plain text for the chatbot */
 function flattenCV(cv) {
   const lines = [];
   const p = cv.personalInfo || {};
@@ -241,9 +215,7 @@ function flattenCV(cv) {
   if (cv.experience?.length) {
     lines.push('\nEXPERIENCE');
     for (const e of cv.experience) {
-      const head = [e.role, e.company, [e.startDate, e.endDate].filter(Boolean).join(' – ')]
-        .filter(Boolean)
-        .join(' | ');
+      const head = [e.role, e.company, [e.startDate, e.endDate].filter(Boolean).join(' – ')].filter(Boolean).join(' | ');
       if (head) lines.push(head);
       for (const b of e.bullets || []) if (b) lines.push(`- ${b}`);
     }
@@ -252,9 +224,7 @@ function flattenCV(cv) {
   if (cv.education?.length) {
     lines.push('\nEDUCATION');
     for (const ed of cv.education) {
-      lines.push(
-        [ed.degree, ed.institution, ed.year, ed.gpa && `GPA ${ed.gpa}`].filter(Boolean).join(' | ')
-      );
+      lines.push([ed.degree, ed.institution, ed.year, ed.gpa && `GPA ${ed.gpa}`].filter(Boolean).join(' | '));
     }
   }
 
@@ -278,9 +248,7 @@ function flattenCV(cv) {
     for (const c of cv.certifications) lines.push(`- ${c}`);
   }
 
-  if (cv.languages?.length) {
-    lines.push('\nLANGUAGES', cv.languages.join(', '));
-  }
+  if (cv.languages?.length) lines.push('\nLANGUAGES', cv.languages.join(', '));
 
   if (cv.awards?.length) {
     lines.push('\nAWARDS');
@@ -290,37 +258,21 @@ function flattenCV(cv) {
   return lines.join('\n');
 }
 
-/**
- * Reverse of flattenCV — a light parser that rebuilds a CV object from plain text
- * so the preview re-renders after a chatbot update.
- */
 function textToCV(text) {
   const lines = text.split(/\r?\n/);
   const cv = {
     personalInfo: { name: '', email: '', phone: '', location: '', linkedin: '', github: '' },
-    summary: '',
-    experience: [],
-    education: [],
+    summary: '', experience: [], education: [],
     skills: { technical: [], soft: [] },
-    projects: [],
-    certifications: [],
-    languages: [],
-    awards: [],
+    projects: [], certifications: [], languages: [], awards: [],
   };
 
   const HEADERS = {
-    SUMMARY: 'summary',
-    PROFILE: 'summary',
-    EXPERIENCE: 'experience',
-    'WORK EXPERIENCE': 'experience',
-    EDUCATION: 'education',
-    SKILLS: 'skills',
-    'TECHNICAL SKILLS': 'skills',
-    PROJECTS: 'projects',
-    CERTIFICATIONS: 'certifications',
-    LANGUAGES: 'languages',
-    AWARDS: 'awards',
-    ACHIEVEMENTS: 'awards',
+    SUMMARY: 'summary', PROFILE: 'summary',
+    EXPERIENCE: 'experience', 'WORK EXPERIENCE': 'experience',
+    EDUCATION: 'education', SKILLS: 'skills', 'TECHNICAL SKILLS': 'skills',
+    PROJECTS: 'projects', CERTIFICATIONS: 'certifications',
+    LANGUAGES: 'languages', AWARDS: 'awards', ACHIEVEMENTS: 'awards',
   };
 
   let section = null;
@@ -329,22 +281,16 @@ function textToCV(text) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-
     const upper = line.toUpperCase();
-    if (HEADERS[upper]) {
-      section = HEADERS[upper];
-      continue;
-    }
+    if (HEADERS[upper]) { section = HEADERS[upper]; continue; }
 
-    // Header block: first non-section line with @ or | treated as contact
     if (!section && !cv.personalInfo.name) {
       if (!line.includes('@') && !line.includes('|') && !line.includes('·')) {
         cv.personalInfo.name = line;
         continue;
       }
       if (line.includes('@')) {
-        const parts = line.split(/[|·•]/).map((s) => s.trim());
-        for (const part of parts) {
+        for (const part of line.split(/[|·•]/).map((s) => s.trim())) {
           if (part.includes('@')) cv.personalInfo.email = part;
           else if (/^\+?\d[\d\s().-]{6,}/.test(part)) cv.personalInfo.phone = part;
           else if (/linkedin/i.test(part)) cv.personalInfo.linkedin = part;
@@ -358,38 +304,22 @@ function textToCV(text) {
     if (section) buf[section].push(line);
   }
 
-  // Summary
   cv.summary = buf.summary.join(' ').replace(/^[-•]\s*/, '');
-
-  // Experience — entries separated by lines that contain " | " or " – "
-  cv.experience = parseEntries(buf.experience).map((e, i) => ({
-    id: `exp-${i}`,
-    ...e,
-  }));
-
-  // Education — same shape
+  cv.experience = parseEntries(buf.experience).map((e, i) => ({ id: `exp-${i}`, ...e }));
   cv.education = parseEntries(buf.education).map((e, i) => ({
-    id: `edu-${i}`,
-    degree: e.role,
-    institution: e.company,
-    year: e.startDate,
-    gpa: '',
+    id: `edu-${i}`, degree: e.role, institution: e.company, year: e.startDate, gpa: '',
   }));
 
-  // Skills
   for (const line of buf.skills) {
     const m = line.match(/^(Technical|Soft)\s*:\s*(.+)$/i);
     if (m) {
       const key = m[1].toLowerCase() === 'technical' ? 'technical' : 'soft';
       cv.skills[key] = m[2].split(/[,•·]/).map((s) => s.trim()).filter(Boolean);
     } else {
-      cv.skills.technical.push(
-        ...line.replace(/^[-•]\s*/, '').split(/[,•·]/).map((s) => s.trim()).filter(Boolean)
-      );
+      cv.skills.technical.push(...line.replace(/^[-•]\s*/, '').split(/[,•·]/).map((s) => s.trim()).filter(Boolean));
     }
   }
 
-  // Projects — block per entry, separated by blank lines
   const projectBlocks = buf.projects.join('\n').split(/\n\s*\n/);
   cv.projects = projectBlocks
     .map((block, i) => {
@@ -403,11 +333,7 @@ function textToCV(text) {
     .filter(Boolean);
 
   cv.certifications = buf.certifications.map((l) => l.replace(/^[-•]\s*/, ''));
-  cv.languages = buf.languages
-    .join(', ')
-    .split(/[,•·]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  cv.languages = buf.languages.join(', ').split(/[,•·]/).map((s) => s.trim()).filter(Boolean);
   cv.awards = buf.awards.map((l) => l.replace(/^[-•]\s*/, ''));
 
   return cv;
@@ -418,9 +344,7 @@ function parseEntries(lines) {
   let current = null;
 
   const flush = () => {
-    if (current && (current.role || current.company || current.bullets.length)) {
-      entries.push(current);
-    }
+    if (current && (current.role || current.company || current.bullets.length)) entries.push(current);
   };
 
   for (const line of lines) {
@@ -430,7 +354,6 @@ function parseEntries(lines) {
       continue;
     }
 
-    // Header line: contains " | " or a date range
     const parts = line.split(/\s*\|\s*/);
     const hasDate = /\b(19|20)\d{2}\b/.test(line) || /\bpresent\b/i.test(line);
 
@@ -446,10 +369,7 @@ function parseEntries(lines) {
         current.endDate = end || '';
       } else if (hasDate) {
         const m = line.match(/((?:19|20)\d{2})\s*[–-]\s*((?:19|20)\d{2}|[Pp]resent)/);
-        if (m) {
-          current.startDate = m[1];
-          current.endDate = m[2];
-        }
+        if (m) { current.startDate = m[1]; current.endDate = m[2]; }
       }
       continue;
     }
